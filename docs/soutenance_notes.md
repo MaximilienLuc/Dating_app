@@ -18,6 +18,19 @@
   dans le pipeline (feature engineering unique pour toutes les waves, pas de modèle séparé)
 - Wave 13 : blackout total de la collecte income (100% manquant) — cas structurel à part, pas
   un manquant aléatoire à imputer comme les autres
+- Le Data Key.doc décrit fidèlement le protocole de collecte de waves 6-9 (notation 1-10
+  indépendante par attribut). Cependant, vérification empirique faite : le CSV tel que
+  distribué sur Kaggle contient déjà la conversion de ces notes en parts de 100, appliquée en
+  amont par les auteurs/curateurs — pas au moment de la collecte, et pas par notre pipeline.
+  Confirmé par deux tests indépendants : (1) empreinte décimale (waves 6-9 : 47 décimales
+  distinctes, valeurs "irrégulières" type 12.77 — incompatible avec une répartition manuelle de
+  100 points ; autres waves : 6 décimales distinctes, valeurs rondes typiques d'une répartition
+  manuelle), (2) test de reconstruction exacte note_i/S×100 : 101/101 lignes reconstructibles
+  sur waves 6-9, contre 61% de faux positifs structurels sur les autres waves utilisées comme
+  groupe de contrôle. La renormalisation de notre pipeline est donc un no-op sur ces données
+  (idempotente) — son vrai rôle utile est de corriger les ~2% de lignes, toutes waves
+  confondues, où la somme déclarée s'écarte de 100 (erreurs de saisie des répondants), pas
+  d'harmoniser une échelle entre groupes de waves.
 
 ## Validation croisée
 - GroupKFold 5 folds sur waves : AUC stable (logit 0.600 ± 0.023, xgb 0.596 ± 0.026), cohérent
@@ -36,6 +49,15 @@
 - Tester sur les paires (4273 lignes, chaque personne ~15x) au lieu des individus uniques (281)
   gonfle artificiellement la significativité par pseudo-réplication (F=48.68 sur paires vs
   F=2.66 dédoublonné) — toujours dédoublonner avant un test statistique par groupe protégé
+
+## Méthode
+- Ne pas se fier à la documentation du dataset (Data Key.doc) sans la confronter aux valeurs
+  réelles du CSV : exemple concret avec la renormalisation waves 6-9 (voir "Dérive de protocole
+  entre waves") — le Key décrit le protocole de collecte d'origine, mais ne dit rien de ce que
+  le CSV publié contient réellement après d'éventuels traitements en amont par les
+  auteurs/curateurs. Vérifié empiriquement par empreinte décimale + test de reconstruction
+  exacte plutôt que supposé. À mentionner si le prof demande comment on valide nos hypothèses
+  de nettoyage.
 
 ## Feature engineering
 - income_missing_A / income_missing_B : flag binaire créé avant imputation, découle
@@ -62,3 +84,13 @@
       field_cd) avant de conclure qu'une seule mitigation suffit
 - [ ] Entraîner une variante des modèles avec income neutralisé/retiré pour comparer la
       disparité avant/après (2e passe de feature engineering fairness)
+
+
+## Choix XGBoost vs Random Forest
+- RF testé en contrôle (hyperparamètres par défaut, même split, mêmes features) : AUC=0.600
+  vs XGBoost AUC=0.603 — écart de 0.003, dans le bruit (l'écart-type du GroupKFold est déjà
+  de ±0.02-0.03)
+- Confirme que le plafond ~0.60 reflète la difficulté intrinsèque du problème (prédire une
+  alchimie à partir d'un profil pré-rencontre), pas un choix d'algorithme sous-optimal
+- XGBoost retenu comme modèle ML officiel : gère nativement les NaN (pertinent vu le taux de
+  missing sur income), permet d'exploiter income_missing_A/B plus finement que RF
