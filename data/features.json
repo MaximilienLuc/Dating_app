@@ -162,7 +162,9 @@
     "goal_B_4",
     "goal_B_5",
     "goal_B_6",
-    "goal_B_NA"
+    "goal_B_NA",
+    "income_missing_A",
+    "income_missing_B"
   ],
   "protected": [
     "cand_female",
@@ -180,8 +182,8 @@
   "borderline_reasons": {
     "imprace_A": "importance d\u00e9clar\u00e9e de l'origine (auto-\u00e9valu\u00e9e) : proxy direct de race_A",
     "imprace_B": "importance d\u00e9clar\u00e9e de l'origine (auto-\u00e9valu\u00e9e) : proxy direct de race_B",
-    "income_A": "revenu m\u00e9dian du zip code, corr\u00e9l\u00e9 \u00e0 race_A (ANOVA sur individus uniques : eta\u00b2=0.037, p=0.033 -- voir section 8)",
-    "income_B": "revenu m\u00e9dian du zip code, corr\u00e9l\u00e9 \u00e0 cand_race (m\u00eame test, sym\u00e9trique -- voir section 8)"
+    "income_A": "revenu m\u00e9dian du zip code, corr\u00e9l\u00e9 \u00e0 race_A (ANOVA sur individus uniques : eta\u00b2=0.037, p=0.033 -- proxy g\u00e9ographique potentiel, cf. notebooks/00_eda_cleaning.ipynb \u00a77)",
+    "income_B": "revenu m\u00e9dian du zip code, corr\u00e9l\u00e9 \u00e0 cand_race (m\u00eame test, sym\u00e9trique)"
   },
   "excluded_rule": "Toute variable not\u00e9e pendant ou apr\u00e8s la soir\u00e9e (attr, sinc, intel, fun, amb, shar, like, prob, met, *_o, match_es, *_s, *_2, *_3, dec_o, match) + ordre du rendez-vous (round, position, order)"
 }

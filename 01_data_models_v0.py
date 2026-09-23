@@ -1,6 +1,6 @@
 """
 HEC Match — 01_data_models (v0)
-Socle technique : chargement, profils pré-rendez-vous, paires (A, B), split par session, modèles de base.
+Socle technique : chargement/nettoyage (src/build_dataset.py), split par session, modèles de base.
 
 Prérequis :
     pip install pandas numpy scikit-learn xgboost pyarrow joblib scipy tabpfn
@@ -24,83 +24,23 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from xgboost import XGBClassifier
 
-SEED = 42
+from src.build_dataset import load_and_clean, engineer_features, SEED
+
 DATA, MODELS = Path("data"), Path("models")
 MODELS.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# 1. Chargement
+# 1-4. Chargement, nettoyage et feature engineering (src/build_dataset.py)
+#      -- logique partagée avec notebooks/00_eda_cleaning.ipynb, jamais dupliquée.
 # ---------------------------------------------------------------------------
-df = pd.read_csv(DATA / "Speed Dating Data.csv", encoding="ISO-8859-1")
-print("Brut :", df.shape)  # attendu : (8378, 195)
+data, feature_dict = load_and_clean()
+data, feature_dict = engineer_features(data, feature_dict)
 
-# ---------------------------------------------------------------------------
-# 2. Profil PRÉ-rendez-vous de chaque participant (questionnaire d'inscription, suffixe _1)
-#    Tout ce qui est noté pendant/après la soirée est EXCLU (fuite d'information).
-# ---------------------------------------------------------------------------
-INTERESTS = ["sports", "tvsports", "exercise", "dining", "museums", "art", "hiking", "gaming",
-             "clubbing", "reading", "tv", "theater", "movies", "concerts", "music", "shopping", "yoga"]
-PREFS = ["attr1_1", "sinc1_1", "intel1_1", "fun1_1", "amb1_1", "shar1_1"]  # ce que je recherche
-SELF = ["attr3_1", "sinc3_1", "intel3_1", "fun3_1", "amb3_1"]              # comment je me note
-OTHER = ["age", "field_cd", "career_c", "goal", "date", "go_out", "imprace", "imprelig",
-         "exphappy", "income"]
-PROTECTED_RAW = ["gender", "race"]  # gender : 0 = femme, 1 = homme
+FEATURES = feature_dict["features"]
+PROTECTED = feature_dict["protected"]
+BORDERLINE = feature_dict["borderline"]
+BORDERLINE_REASONS = feature_dict["borderline_reasons"]
 
-prof = df[["iid"] + OTHER + INTERESTS + PREFS + SELF + PROTECTED_RAW].drop_duplicates("iid").copy()
-prof["income"] = pd.to_numeric(prof["income"].astype(str).str.replace(",", ""), errors="coerce")
-
-# Vagues 6-9 : préférences notées de 1 à 10 au lieu de 100 points à répartir -> renormalisation en parts de 100
-s = prof[PREFS].sum(axis=1).replace(0, np.nan)
-prof[PREFS] = prof[PREFS].div(s, axis=0) * 100
-
-# ---------------------------------------------------------------------------
-# 3. Paires (A décide, B est le candidat)
-# ---------------------------------------------------------------------------
-pairs = df[["iid", "pid", "wave", "dec", "match", "int_corr"]].dropna(subset=["pid"]).copy()
-pairs["pid"] = pairs["pid"].astype(int)
-
-A = prof.add_suffix("_A").rename(columns={"iid_A": "iid"})
-B = prof.add_suffix("_B").rename(columns={"iid_B": "pid"})
-data = pairs.merge(A, on="iid", how="left").merge(B, on="pid", how="left")
-
-# Variables de couple
-data["age_diff"] = data["age_B"] - data["age_A"]
-data["abs_age_diff"] = data["age_diff"].abs()
-# Adéquation : ce que A recherche (poids) x comment B se décrit
-data["fit_score"] = sum(data[f"{a}1_1_A"] / 100 * data[f"{a}3_1_B"]
-                        for a in ["attr", "sinc", "intel", "fun", "amb"])
-
-# Attributs protégés : gardés pour l'AUDIT, jamais en entrée des modèles
-data["cand_female"] = (data["gender_B"] == 0).astype(int)
-data["cand_race"] = data["race_B"]  # 1 Black, 2 White, 3 Latino, 4 Asian, 5 Native Am., 6 Other
-data["same_race"] = (data["race_A"] == data["race_B"]).astype(int)
-PROTECTED = ["cand_female", "cand_race", "same_race", "gender_A", "race_A"]
-
-# Variables limites : pas des attributs protégés, mais suspectées d'être des proxys
-# (voir section 8, audit ANOVA income ~ race)
-BORDERLINE = ["imprace_A", "imprace_B", "income_A", "income_B"]
-BORDERLINE_REASONS = {
-    "imprace_A": "importance déclarée de l'origine (auto-évaluée) : proxy direct de race_A",
-    "imprace_B": "importance déclarée de l'origine (auto-évaluée) : proxy direct de race_B",
-    "income_A": "revenu médian du zip code, corrélé à race_A "
-                "(ANOVA sur individus uniques : eta²=0.037, p=0.033 -- voir section 8)",
-    "income_B": "revenu médian du zip code, corrélé à cand_race "
-                "(même test, symétrique -- voir section 8)",
-}
-
-# ---------------------------------------------------------------------------
-# 4. Liste des variables d'entrée
-# ---------------------------------------------------------------------------
-CAT = ["field_cd", "career_c", "goal"]
-num_base = [c for c in OTHER if c not in CAT] + INTERESTS + PREFS + SELF
-cat_cols = [f"{c}_{side}" for c in CAT for side in "AB"]
-
-dummies = pd.get_dummies(data[cat_cols].astype("Int64").astype(str), prefix=cat_cols).astype(int)
-dummies.columns = dummies.columns.str.replace("<NA>", "NA", regex=False)  # XGBoost refuse '<'
-data = pd.concat([data, dummies], axis=1)
-
-FEATURES = ([f"{c}_A" for c in num_base] + [f"{c}_B" for c in num_base]
-            + ["int_corr", "age_diff", "abs_age_diff", "fit_score"] + list(dummies.columns))
 print("Paires :", data.shape, "| variables d'entrée :", len(FEATURES),
       "| taux de oui :", round(data["dec"].mean(), 3))
 
@@ -124,16 +64,7 @@ keep = ["iid", "pid", "wave", "dec", "match"] + PROTECTED + FEATURES
 data[keep].to_parquet(DATA / "clean.parquet", index=False)
 
 with open(DATA / "features.json", "w") as f:
-    json.dump({
-        "target": "dec",
-        "features": FEATURES,
-        "protected": PROTECTED,
-        "borderline": BORDERLINE,
-        "borderline_reasons": BORDERLINE_REASONS,
-        "excluded_rule": "Toute variable notée pendant ou après la soirée (attr, sinc, intel, fun, amb, "
-                         "shar, like, prob, met, *_o, match_es, *_s, *_2, *_3, dec_o, match) + ordre du "
-                         "rendez-vous (round, position, order)",
-    }, f, indent=2)
+    json.dump(feature_dict, f, indent=2)
 
 with open(DATA / "split.json", "w") as f:
     json.dump({"seed": SEED, "group": "wave", "train_waves": train_waves, "test_waves": test_waves}, f)
