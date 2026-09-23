@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Raw dataset (téléchargé depuis Kaggle, pas versionné — voir README)
+data/Speed Dating Data.csv
+data/Speed Dating Data Key.doc
