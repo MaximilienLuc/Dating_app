@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairness*, Pr. Christophe Pérignon et Dr Sébastien Saurin, MSc DSAIB, septembre 2026).
 
-**Client fictif : « HEC Match »**, une app de rencontre qui décide quels profils montrer à chaque utilisateur. Objectif : analyse de scoring (cible binaire) comparant trois modèles — un white box (logit, idéalement PLTR ou AdaLogit), XGBoost, et TabPFN (Tabular Foundation Model) — sur quatre dimensions : **performance** (statistique et économique), **interprétabilité** (globale et locale), **stabilité**, **fairness**. Il faut arbitrer entre ces dimensions et recommander un modèle selon une logique d'IA de confiance, pas seulement la meilleure AUC.
+**Client fictif : « HEC Match »**, une app de rencontre qui décide quels profils montrer à chaque utilisateur. Objectif : analyse de scoring (cible binaire) comparant trois modèles — un white box (logit), XGBoost, et TabICL (Tabular Foundation Model — remplace TabPFN, initialement prévu) — sur quatre dimensions : **performance** (statistique et économique), **interprétabilité** (globale et locale), **stabilité**, **fairness**. Il faut arbitrer entre ces dimensions et recommander un modèle selon une logique d'IA de confiance, pas seulement la meilleure AUC.
 
 **Dataset** : Speed Dating Experiment (Fisman et Iyengar, Columbia, 2002–2004) — 8 378 lignes, 195 variables brutes, 21 sessions, rendez-vous de 4 minutes. Chaque ligne = un participant sur un rendez-vous (chaque rencontre apparaît deux fois).
 
@@ -27,6 +27,7 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 5. **P&L économique** : oui = +X €, non = −Y €, match manqué = revenu perdu. Seuil optimisé sur le P&L + analyse de sensibilité à X et Y.
 6. **Stabilité** : train/test croisé entre sessions + bootstrap. Mesurer distances entre coefficients / importances, et % de décisions qui basculent.
 7. **Limites à annoncer** : données anciennes, étudiants Columbia uniquement, beaucoup de valeurs manquantes (87 % des lignes, 1,8 % des cellules), origine utilisée seulement pour l'audit.
+8. **Colinéarité des 6 préférences pour le logit** : `attr1_1+sinc1_1+intel1_1+fun1_1+amb1_1+shar1_1` somme à 100 par construction (confirmé structurel sur toutes les waves, pas un artefact — voir point 3), donc parfaitement colinéaires. Décision actée : retirer `shar1_1_A`/`shar1_1_B` des features du **logit uniquement** (XGBoost/TabICL gardent les 6, non sensibles à la colinéarité) — analogue à `drop_first=True`. Alternative plus rigoureuse (transform log-ratio sur données compositionnelles) écartée pour le calendrier. **Pas encore implémenté dans le code** (voir État actuel).
 
 ## Équipe
 
@@ -35,7 +36,7 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 | Alex (moi) | Données, variables, découpage, les 3 modèles, performance et P&L |
 | Max | Interprétabilité (coefficients, SHAP, LIME, PDP/ICE, permutation importance, XPER) ; `src/metrics.py` ; mail de pré-validation |
 | Blanquette | Fairness (tests, FPDP, mitigation, TOST) et récit de la soutenance |
-| Remi | Stabilité (absent le premier jour) |
+| Remi | Stabilité — **livré et mergé** : bootstrap par session sur logit/xgb (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`). À relancer une fois `features_logit` disponible (retrait shar1_1) ; TabICL à ajouter une fois débloqué côté Alex |
 | Oli | App Streamlit (deux profils → proba des 3 modèles + SHAP + onglet fairness + onglet stabilité) et template du deck (absent le premier jour) |
 
 ## Contrat de fichiers (pour travailler en parallèle)
@@ -43,27 +44,41 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 **Ces noms et interfaces sont figés — ne pas les renommer ni changer leur forme sans en avertir toute l'équipe.** La liste des variables est figée samedi matin au plus tard.
 
 - `data/clean.parquet` — dataset nettoyé
-- `data/features.json` — cible, variables, attributs protégés, variables limites, règle d'exclusion
+- `data/features.json` — cible, variables (`features`), attributs protégés, variables limites (`borderline` + `borderline_reasons`), règle d'exclusion. Aura bientôt une clé `features_logit` (retrait shar1_1 pour le logit, pas encore présente)
 - `data/split.json` — découpage train/test par session
-- `models/logit.joblib`, `models/xgb.joblib`, `models/tabpfn.joblib` — tous avec `predict_proba`
-- `src/metrics.py` — métriques partagées (Max)
+- `models/logit.joblib`, `models/xgb.joblib`, `models/tabicl.joblib` — tous avec `predict_proba` (`tabicl.joblib` pas encore créé, TabICL bloqué)
+- `src/build_dataset.py` — `load_and_clean()` + `engineer_features()`, logique partagée (Alex), importée par `01_data_models_v0.py` et le notebook EDA
+- `src/metrics.py` — métriques partagées (Max, pas encore livré)
+- `src/stability.py` — bootstrap de stabilité par session (Remi, livré)
 - Un notebook par bloc :
+  - `00_eda_cleaning` (Alex) — EDA et nettoyage, livré
   - `01_data_models` (Alex)
   - `02_interpretability` (Max)
   - `03_fairness` (Blanquette)
-  - `04_stability` (Remi)
+  - `04_stability` (Remi, livré : `04_stability.ipynb` + `.executed.ipynb`)
+- `docs/data_dictionary.md`, `docs/soutenance_notes.md` — livrés (Alex)
+- `reports/stability/` — sorties du bootstrap de Remi (CSV, PNG, `summary.json`)
 - `app/` — application Streamlit (Oli)
 
 ## État actuel
 
-`01_data_models_v0.py` est un script v0 **non testé**. Il charge le CSV (encodage ISO-8859-1), construit un profil par participant, renormalise les préférences (sessions 6–9), fusionne les profils de A et B sur `iid`/`pid`, crée les variables de couple et les attributs protégés, encode `field_cd`, `career_c`, `goal` en indicatrices, découpe par session (25 % test), sauvegarde le contrat de fichiers ci-dessus, puis entraîne un logit (imputation + standardisation + régression logistique), XGBoost et TabPFN (avec gestion d'erreur si TabPFN échoue sur CPU).
+`01_data_models_v0.py` tourne de bout en bout (testé, plus le script v0 non testé d'origine). Il importe `load_and_clean()`/`engineer_features()` depuis `src/build_dataset.py` (logique de nettoyage/feature engineering centralisée, plus dupliquée dans le script), découpe par session (`GroupShuffleSplit`, seed=42), sauvegarde le contrat de fichiers, entraîne logit + XGBoost, et contient une section d'audit (missingness, GroupKFold vs split unique, ANOVA income~race dédupliquée). EDA méthodique faite dans `notebooks/00_eda_cleaning.ipynb` (10 sections, exécuté sans erreur). `docs/data_dictionary.md` et `docs/soutenance_notes.md` livrés et tenus à jour.
+
+Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`) — split identique bit à bit des deux côtés, aucun conflit hors `README.md` (résolu). Son `model_factory()` duplique les pipelines logit/xgb déjà dans `01_data_models_v0.py` — dette technique notée, factorisation prévue après le gel des modèles vendredi soir.
+
+**Travail en cours, pas encore codé** (décisions actées, implémentation à faire) :
+- Retrait de `shar1_1_A`/`shar1_1_B` pour le logit uniquement (colinéarité, point 8 ci-dessus) — `features_logit` pas encore dans `features.json`.
+- Vérification/correction de l'encodage des dummies `field_cd`/`career_c`/`goal` : `drop_first=True` pas encore confirmé dans `src/build_dataset.py`.
+- VIF de contrôle sur les features finales du logit — en attente des deux points ci-dessus.
+
+**Bloqué** : `TabICLClassifier.fit()` (package `tabicl`, installé) segfault de façon reproductible sur nos données réelles — y compris réduites à quelques colonnes numériques et 30 lignes, CPU forcé, `n_estimators=1`. Des données synthétiques aléatoires de même forme fonctionnent, donc ce n'est pas un problème de taille/dimension mais quelque chose de spécifique à nos données (cause précise non identifiée). Bloque la comparaison à 3 modèles et le P&L tant que ce n'est pas résolu ou contourné.
 
 ### Prochaines étapes (Alex)
-1. Faire tourner et déboguer la v0, la pousser et prévenir le groupe.
-2. Valider le tri des variables avec le dictionnaire (`Speed Dating Data Key.doc`).
-3. Remplacer le logit par PLTR ou AdaLogit (package trust-free).
-4. Régler XGBoost par validation croisée groupée par session.
-5. Faire tourner TabPFN sur GPU (Colab) ou via `tabpfn-client` si besoin.
+1. Débloquer TabICL (isoler la cause du crash, ou contourner — ex. autre machine/Colab) : condition pour comparer les 3 modèles.
+2. Implémenter le retrait de `shar1_1` pour le logit dans `src/build_dataset.py` + `features.json` (clé `features_logit`), puis prévenir Remi (son script devra la lire explicitement et relancer sa stabilité côté logit).
+3. Corriger l'encodage des dummies (`drop_first=True`), puis calculer le VIF de contrôle sur les features finales du logit.
+4. Créer `src/logit_model.py`, `src/xgb_model.py`, `src/tabicl_model.py` avec docstring standardisé (features utilisées, split, attributs protégés exclus, proxy income~race, limites d'interprétabilité) ; réentraîner et comparer AUC test + GroupKFold pour les 3 modèles.
+5. Implémenter le P&L (matrice de coûts, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`).
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.
