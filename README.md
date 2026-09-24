@@ -20,4 +20,3 @@ Pour (ré)entraîner TabICL : coller `colab/train_tabicl.py` dans une cellule Co
 [Notebook with results](04_stability.executed.ipynb) · [Notebook source](04_stability.ipynb) · [Method and app integration](reports/stability/README.md)
 
 Session-level bootstrap: logit/XGBoost training sensitivity and three-model test uncertainty using frozen TabICL predictions. Reproduce the analysis with `python -m src.stability`; see `requirements-stability.txt` for dependencies.
-
