@@ -66,17 +66,16 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 
 Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`) — split identique bit à bit des deux côtés, aucun conflit hors `README.md` (résolu). Son `model_factory()` duplique les pipelines logit/xgb déjà dans `01_data_models_v0.py` — dette technique notée, factorisation prévue après le gel des modèles vendredi soir.
 
-**Fait depuis la dernière mise à jour** : retrait de `shar1_1` pour le logit (`features_logit`), correction de l'encodage des dummies (`drop_first=True`, vocabulaire fixe `CAT_CODES`), VIF de contrôle calculé — voir point 8 et `docs/soutenance_notes.md` pour le détail. **Reste à faire** : prévenir Max (interprétabilité du logit à refaire sur le nouveau schéma) et Rémi (stabilité à relancer — déjà noté), et réentraîner TabICL sur Colab avec le `features.json` à jour (158 features au lieu de 164) pour une comparaison à iso-features.
+**Fait depuis la dernière mise à jour** : retrait de `shar1_1` pour le logit (`features_logit`), correction de l'encodage des dummies (`drop_first=True`, vocabulaire fixe `CAT_CODES`), VIF de contrôle calculé, TabICL réentraîné sur Colab avec le `features.json` à jour (158 features, comparaison désormais à iso-features) — voir point 8 et `docs/soutenance_notes.md` pour le détail. **Reste à faire** : prévenir Max (interprétabilité du logit à refaire sur le nouveau schéma) et Rémi (stabilité à relancer — déjà noté).
 
 **TabICL débloqué, mais pas portable.** `TabICLClassifier.fit()` (tabicl==2.2.0) segfault de façon reproductible sur le chemin CPU — confirmé sur Mac Apple Silicon (M4) **et** sur Colab en CPU (x86_64) : pas un bug spécifique à Apple Silicon, le chemin CPU de la lib est cassé plus largement. Seul `device="cuda"` sur Colab fonctionne. Le `models/tabicl.joblib` qui en résulte est verrouillé sur l'état CUDA (`torch==2.11.0+cu128`) : ne se charge pas sur une machine sans CUDA (plante dès `joblib.load()`, avant `predict_proba()`) — pas portable, mais accepté (usage ponctuel via Colab, pas de réentraînement fréquent). Script versionné dans `colab/train_tabicl.py`. En-tête standardisé dans `src/tabicl_model.py`. Détail complet du diagnostic dans `docs/soutenance_notes.md`.
 
-**Comparaison à 3 modèles obtenue** (AUC test split unique / GroupKFold 5 folds moyenne±écart-type) : logit 0.587 / 0.603±0.024, XGBoost 0.604 / 0.599±0.021, TabICL 0.638 / 0.591±0.039 (Colab). Les 3 convergent vers ~0.59-0.60 en GroupKFold — plafond du problème, pas un effet d'algorithme. Voir tableau complet dans `docs/soutenance_notes.md`.
+**Comparaison à 3 modèles obtenue, à iso-features (158)** (AUC test split unique / GroupKFold 5 folds moyenne±écart-type) : logit 0.589 / 0.603±0.024, XGBoost 0.611 / 0.599±0.024, TabICL 0.632 / 0.591±0.038 (Colab, torch==2.11.0+cu128). Les 3 convergent vers ~0.59-0.60 en GroupKFold — plafond du problème, pas un effet d'algorithme. Voir tableau complet dans `docs/soutenance_notes.md`.
 
 ### Prochaines étapes (Blanquette)
 1. Prévenir Max (logit à réinterpréter sur le nouveau schéma) et Rémi (stabilité à relancer — déjà su, mais schéma dummies aussi changé).
-2. Réentraîner TabICL sur Colab avec le `features.json` à jour (158 features) pour une comparaison à iso-features avec logit/xgb.
-3. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`).
-4. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`), y compris pour TabICL (nécessitera de repasser par Colab pour les prédictions).
+2. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`).
+3. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`), y compris pour TabICL (nécessitera de repasser par Colab pour les prédictions).
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.

@@ -38,25 +38,24 @@
 |---|---|---|
 | Logit | 0.589 | 0.603 ± 0.024 |
 | XGBoost | 0.611 | 0.599 ± 0.024 |
-| TabICL | 0.638 | 0.591 ± 0.039 |
+| TabICL | 0.632 | 0.591 ± 0.038 |
 
-⚠️ **Comparaison pas parfaitement à iso-features** : logit/XGBoost ci-dessus utilisent le
-schéma de features actuel (post-correction dummies `drop_first`, 158 features/156 pour le
-logit). Les chiffres TabICL datent d'avant cette correction (schéma à 164 features, Colab) --
-pas encore réentraîné avec le nouveau `features.json`. Écart attendu faible (la correction
-retire des colonnes redondantes, pas d'information), mais à refaire sur Colab avant de citer
-ces chiffres comme définitifs.
+Comparaison **à iso-features** (158 features, schéma post-correction dummies `drop_first`,
+mêmes pour les 3 modèles) : TabICL réentraîné sur Colab avec le `features.json` à jour --
+résultat quasi identique à la version pré-correction (0.638/0.591±0.039 -> 0.632/0.591±0.038),
+confirmant que la correction des dummies ne changeait pas l'information disponible, juste des
+colonnes redondantes.
 
 - Les 3 modèles convergent vers le même plafond ~0.59-0.60 en GroupKFold, malgré des
   architectures très différentes (linéaire, arbres boostés, transformer en in-context
   learning) — confirme que le plafond reflète la difficulté intrinsèque du problème (prédire
   une alchimie à partir d'un profil pré-rencontre), pas un choix d'algorithme sous-optimal.
   Cohérent avec le test RF vs XGBoost (voir "Choix XGBoost vs Random Forest").
-- TabICL a l'AUC test (split unique) la plus haute (0.638) mais aussi l'écart-type GroupKFold
-  le plus large (±0.039, contre ±0.02-0.024 pour logit/xgb) — son résultat sur le split unique
-  est probablement optimiste (fold 5 tombe à 0.529, fold 3 monte à 0.650) plutôt qu'un vrai
+- TabICL a l'AUC test (split unique) la plus haute (0.632) mais aussi l'écart-type GroupKFold
+  le plus large (±0.038, contre ±0.024 pour logit/xgb) — son résultat sur le split unique
+  est probablement optimiste (fold 5 tombe à 0.533, fold 3 monte à 0.652) plutôt qu'un vrai
   avantage. **Le chiffre GroupKFold est celui à citer en priorité**, pas le split unique.
-- Chiffres TabICL obtenus sur Colab (`device="cuda"`) — voir "TabICL — diagnostic du crash CPU
+- Chiffres TabICL obtenus sur Colab (`device="cuda"`, torch==2.11.0+cu128) — voir "TabICL — diagnostic du crash CPU
   et décision". Logit/XGBoost obtenus en local (`01_data_models_v0.py`).
 
 ## income_A / income_B — proxy potentiel
@@ -194,8 +193,8 @@ ces chiffres comme définitifs.
       pas corrigées faute de temps
 - [x] Débloquer TabICL et comparer les 3 modèles — fait via Colab/CUDA, voir "TabICL —
       diagnostic du crash CPU et décision" et le tableau dans "Validation croisée"
-- [ ] Réentraîner TabICL sur Colab avec le features.json post-correction dummies (158
-      features au lieu de 164) pour une comparaison à iso-features parfaite
+- [x] Réentraîner TabICL sur Colab avec le features.json post-correction dummies (158
+      features au lieu de 164) — fait, résultat quasi identique (0.632/0.591±0.038)
 - [ ] Prévenir Max : le logit a maintenant un features_logit distinct de features -- toute
       interprétation (SHAP/coefficients) du logit déjà commencée sur l'ancien schéma sera à
       refaire
