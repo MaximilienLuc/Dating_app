@@ -32,9 +32,25 @@
   confondues, où la somme déclarée s'écarte de 100 (erreurs de saisie des répondants), pas
   d'harmoniser une échelle entre groupes de waves.
 
-## Validation croisée
-- GroupKFold 5 folds sur waves : AUC stable (logit 0.600 ± 0.023, xgb 0.596 ± 0.026), cohérent
-  avec le split unique initial — confirme que l'AUC modeste est réelle, pas un artefact du split
+## Validation croisée — comparaison à 3 modèles
+
+| Modèle | AUC test (split unique) | AUC GroupKFold (5 folds, moyenne ± écart-type) |
+|---|---|---|
+| Logit | 0.587 | 0.603 ± 0.024 |
+| XGBoost | 0.604 | 0.599 ± 0.021 |
+| TabICL | 0.638 | 0.591 ± 0.039 |
+
+- Les 3 modèles convergent vers le même plafond ~0.59-0.60 en GroupKFold, malgré des
+  architectures très différentes (linéaire, arbres boostés, transformer en in-context
+  learning) — confirme que le plafond reflète la difficulté intrinsèque du problème (prédire
+  une alchimie à partir d'un profil pré-rencontre), pas un choix d'algorithme sous-optimal.
+  Cohérent avec le test RF vs XGBoost (voir "Choix XGBoost vs Random Forest").
+- TabICL a l'AUC test (split unique) la plus haute (0.638) mais aussi l'écart-type GroupKFold
+  le plus large (±0.039, contre ±0.02-0.024 pour logit/xgb) — son résultat sur le split unique
+  est probablement optimiste (fold 5 tombe à 0.529, fold 3 monte à 0.650) plutôt qu'un vrai
+  avantage. **Le chiffre GroupKFold est celui à citer en priorité**, pas le split unique.
+- Chiffres TabICL obtenus sur Colab (`device="cuda"`) — voir "TabICL — diagnostic du crash CPU
+  et décision". Logit/XGBoost obtenus en local (`01_data_models_v0.py`).
 
 ## income_A / income_B — proxy potentiel
 - Revenu médian du zip code déclaré, pas un revenu individuel — à clarifier dans le rapport
@@ -92,6 +108,28 @@
 - Analyse de sensibilité prévue sur 3 jeux d'hypothèses (X=2/Y=0.5, X=1/Y=1, X=3/Y=0.3) pour
   vérifier la stabilité du modèle gagnant et du seuil optimal
 
+## TabICL — diagnostic du crash CPU et décision
+- `TabICLClassifier.fit()` (tabicl==2.2.0) provoque un segfault natif (SIGSEGV) reproductible.
+  Diagnostic méthodique fait avant de conclure quoi que ce soit : environnement vérifié
+  identique pour toutes les libs (pas de mismatch type pandas/xgboost du début de projet),
+  install/import OK, crash uniquement à `.fit()` et immédiat (pas un hang) ; dtypes/NaN/Inf
+  vérifiés propres avant et après imputation (aucune anomalie) ; taille (30 à 500 lignes),
+  nombre de colonnes (1 à 164) et équilibre des classes testés sans effet sur le crash ;
+  données 100% synthétiques (`np.random.randn`, même forme exacte) ne crashent jamais.
+  Recherche binaire sur les 164 colonnes : n'importe quelle colonne seule fait déjà crasher
+  (pas une colonne coupable en particulier) — la variable qui distingue crash/pas-crash est
+  "données réelles" vs "synthétiques", pas la forme ni le contenu d'une colonne précise.
+- Confirmé sur DEUX machines : Mac Apple Silicon (M4, torch 2.14.0, CPU) ET Colab (x86_64, CPU)
+  crashent tous les deux. **Ce n'est donc pas un bug spécifique à Apple Silicon** : le chemin
+  CPU de tabicl est cassé plus largement (au moins sur ces deux architectures).
+- Seul `device="cuda"` sur Colab fonctionne (`torch==2.11.0+cu128` observé). Mais le `.joblib`
+  qui en résulte est verrouillé sur l'état CUDA : le charger sur une machine sans CUDA plante
+  aussi, dès `joblib.load()`, avant même `predict_proba()` — donc pas portable.
+- Décision d'équipe : accepté. L'usage de TabICL est ponctuel (pas de réentraînement fréquent,
+  dashboard Streamlit pas concerné), pas besoin qu'il tourne ailleurs que sur Colab pour
+  l'instant. Script d'entraînement/inférence versionné dans `colab/train_tabicl.py` (à coller
+  dans une cellule Colab, runtime GPU requis — Modifier > Paramètres du notebook > GPU).
+
 ## Coordination équipe / dette technique
 - Merge avec le travail de stabilité de Rémi fait le 24/09 — split.json identique bit à bit des
   deux côtés (mêmes train_waves/test_waves), aucun recalcul nécessaire sur ce point
@@ -105,7 +143,9 @@
   présente dans 01_data_models_v0.py — dette technique notée, factorisation prévue APRÈS le gel
   des modèles vendredi soir, pas avant
 - TabICL absent de la stabilité de Rémi pour l'instant (normal, substitution décidée après son
-  travail initial) — à ajouter une fois débloqué de notre côté (voir "À faire")
+  travail initial) — pour l'ajouter, il devra aussi passer par Colab/CUDA (même contrainte que
+  nous, voir "TabICL — diagnostic du crash CPU et décision") : son bootstrap par session ne
+  peut pas tourner en local sur TabICL
 
 ## À faire (pas encore réalisé, à ne pas oublier)
 - [ ] Construire la matrice de coûts P&L et implémenter le calcul du profit total pour un seuil
@@ -124,9 +164,9 @@
       confirmer drop_first=True — pas encore vérifié dans le code actuel
 - [ ] VIF de contrôle sur les features finales du logit (résultat en attente, bloqué derrière
       les deux points ci-dessus)
-- [ ] Débloquer TabICL : crash reproductible (segfault) sur nos données réelles même réduites à
-      quelques colonnes/lignes, cause pas encore identifiée — nécessaire avant de pouvoir
-      comparer les 3 modèles et lancer le P&L sur les 3
+- [x] Débloquer TabICL et comparer les 3 modèles — fait via Colab/CUDA, voir "TabICL —
+      diagnostic du crash CPU et décision" et le tableau dans "Validation croisée"
+- [ ] Lancer le P&L sur les 3 modèles (dépend de "Construire la matrice de coûts P&L" plus haut)
 
 
 ## Choix XGBoost vs Random Forest

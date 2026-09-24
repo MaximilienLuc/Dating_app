@@ -33,10 +33,10 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 
 | Membre | Rôle |
 |---|---|
-| Alex (moi) | Données, variables, découpage, les 3 modèles, performance et P&L |
+| Blanquette (moi) | **Rôles échangés avec Alex** : données, EDA, les 3 modèles, performance et P&L (voir tout ce document — c'est le travail fait jusqu'ici) |
+| Alex | Rôle échangé avec Blanquette — à confirmer ce qu'il reprend (fairness ?) |
 | Max | Interprétabilité (coefficients, SHAP, LIME, PDP/ICE, permutation importance, XPER) ; `src/metrics.py` ; mail de pré-validation |
-| Blanquette | Fairness (tests, FPDP, mitigation, TOST) et récit de la soutenance |
-| Remi | Stabilité — **livré et mergé** : bootstrap par session sur logit/xgb (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`). À relancer une fois `features_logit` disponible (retrait shar1_1) ; TabICL à ajouter une fois débloqué côté Alex |
+| Remi | Stabilité — **livré et mergé** : bootstrap par session sur logit/xgb (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`). À relancer une fois `features_logit` disponible (retrait shar1_1) ; TabICL à ajouter une fois qu'il aura accès à Colab/CUDA lui aussi |
 | Oli | App Streamlit (deux profils → proba des 3 modèles + SHAP + onglet fairness + onglet stabilité) et template du deck (absent le premier jour) |
 
 ## Contrat de fichiers (pour travailler en parallèle)
@@ -71,14 +71,15 @@ Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`
 - Vérification/correction de l'encodage des dummies `field_cd`/`career_c`/`goal` : `drop_first=True` pas encore confirmé dans `src/build_dataset.py`.
 - VIF de contrôle sur les features finales du logit — en attente des deux points ci-dessus.
 
-**Bloqué** : `TabICLClassifier.fit()` (package `tabicl`, installé) segfault de façon reproductible sur nos données réelles — y compris réduites à quelques colonnes numériques et 30 lignes, CPU forcé, `n_estimators=1`. Des données synthétiques aléatoires de même forme fonctionnent, donc ce n'est pas un problème de taille/dimension mais quelque chose de spécifique à nos données (cause précise non identifiée). Bloque la comparaison à 3 modèles et le P&L tant que ce n'est pas résolu ou contourné.
+**TabICL débloqué, mais pas portable.** `TabICLClassifier.fit()` (tabicl==2.2.0) segfault de façon reproductible sur le chemin CPU — confirmé sur Mac Apple Silicon (M4) **et** sur Colab en CPU (x86_64) : pas un bug spécifique à Apple Silicon, le chemin CPU de la lib est cassé plus largement. Seul `device="cuda"` sur Colab fonctionne. Le `models/tabicl.joblib` qui en résulte est verrouillé sur l'état CUDA (`torch==2.11.0+cu128`) : ne se charge pas sur une machine sans CUDA (plante dès `joblib.load()`, avant `predict_proba()`) — pas portable, mais accepté (usage ponctuel via Colab, pas de réentraînement fréquent). Script versionné dans `colab/train_tabicl.py`. En-tête standardisé dans `src/tabicl_model.py`. Détail complet du diagnostic dans `docs/soutenance_notes.md`.
 
-### Prochaines étapes (Alex)
-1. Débloquer TabICL (isoler la cause du crash, ou contourner — ex. autre machine/Colab) : condition pour comparer les 3 modèles.
-2. Implémenter le retrait de `shar1_1` pour le logit dans `src/build_dataset.py` + `features.json` (clé `features_logit`), puis prévenir Remi (son script devra la lire explicitement et relancer sa stabilité côté logit).
-3. Corriger l'encodage des dummies (`drop_first=True`), puis calculer le VIF de contrôle sur les features finales du logit.
-4. Créer `src/logit_model.py`, `src/xgb_model.py`, `src/tabicl_model.py` avec docstring standardisé (features utilisées, split, attributs protégés exclus, proxy income~race, limites d'interprétabilité) ; réentraîner et comparer AUC test + GroupKFold pour les 3 modèles.
-5. Implémenter le P&L (matrice de coûts, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`).
+**Comparaison à 3 modèles obtenue** (AUC test split unique / GroupKFold 5 folds moyenne±écart-type) : logit 0.587 / 0.603±0.024, XGBoost 0.604 / 0.599±0.021, TabICL 0.638 / 0.591±0.039 (Colab). Les 3 convergent vers ~0.59-0.60 en GroupKFold — plafond du problème, pas un effet d'algorithme. Voir tableau complet dans `docs/soutenance_notes.md`.
+
+### Prochaines étapes (Blanquette)
+1. Implémenter le retrait de `shar1_1` pour le logit dans `src/build_dataset.py` + `features.json` (clé `features_logit`), puis prévenir Remi (son script devra la lire explicitement et relancer sa stabilité côté logit).
+2. Corriger l'encodage des dummies (`drop_first=True`), puis calculer le VIF de contrôle sur les features finales du logit.
+3. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`).
+4. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`), y compris pour TabICL (nécessitera de repasser par Colab pour les prédictions).
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.
