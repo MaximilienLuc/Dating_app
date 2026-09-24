@@ -37,3 +37,20 @@ Before the final delivery, rerun on the frozen features, final models and valida
 ## Point for the fairness audit
 
 In the current prepared data, 126 rows have a missing `race_A` or `cand_race`, while `same_race` is encoded as 0. Unknown race should stay unknown in the audit, rather than count as a known different-race pair. This does not enter our models (the protected columns are excluded). Coordinate that data correction with Alex and Blanche before the final fairness analysis.
+
+## Current cloud results
+
+[Executed notebook](../../04_stability.executed.ipynb) · [Successful cloud run](https://github.com/MaximilienLuc/Dating_app/actions/runs/35986538526)
+
+| Model | Reference AUC | Mean decisions changed after refitting |
+| :--- | ---: | ---: |
+| Logit | 0.585 | 16.6% |
+| XGBoost | 0.612 | 21.3% |
+
+The paired test-session interval for the AUC difference (logit minus XGBoost) is [-0.045, 0.067]. It includes zero. The results do not establish a decisive AUC advantage, and the recommendations are sensitive to which training sessions are sampled.
+
+The local macOS pilot gave XGBoost AUC 0.604 versus 0.612 on the Linux cloud run, with matching declared package versions. The cause has not been isolated. Use the committed cloud outputs consistently; they are not claimed to reproduce the group's saved model bit for bit. See `provenance.json`.
+
+![Training sensitivity and session performance](stability.png)
+
+![Coefficient stability](coefficients.png)

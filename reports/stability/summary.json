@@ -1,0 +1,143 @@
+{
+  "status": "preliminary_v0",
+  "models_run": [
+    "logit",
+    "xgb"
+  ],
+  "tabpfn": {
+    "status": "pending",
+    "reason": "No TabPFN training implementation in the v0 contract; rerun stability when available."
+  },
+  "train_rows": 6542,
+  "test_rows": 1826,
+  "features": 162,
+  "train_waves": [
+    3,
+    4,
+    5,
+    7,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    17,
+    19,
+    20,
+    21
+  ],
+  "test_waves": [
+    1,
+    2,
+    6,
+    9,
+    16,
+    18
+  ],
+  "seed": 42,
+  "threshold": 0.5,
+  "n_refits": 200,
+  "n_eval": 2000,
+  "method": {
+    "training": "Paired session bootstrap; fixed hyperparameters and estimator seed; refit preprocessing on each training draw; fixed test set.",
+    "evaluation": "Paired session bootstrap of fixed-model test predictions; row-weighted pooled AUC.",
+    "coefficient_units": "Original training-set standard deviations; signed logit coefficients.",
+    "xgb_vector": "Normalized gain importance, compared only within XGBoost; not comparable to coefficient distances.",
+    "threshold": "0.5 is a provisional display rule, not a tuned business threshold."
+  },
+  "limitations": [
+    "Only six test sessions: uncertainty estimates are exploratory.",
+    "Refit percentile ranges describe sensitivity, not confidence intervals for the best model.",
+    "The v0 feature set includes imprace_A/B; the group must decide whether to retain them.",
+    "Results must be regenerated after any data, feature, model or threshold change.",
+    "No TabPFN results yet. No fairness or production-readiness conclusion from this analysis."
+  ],
+  "models": {
+    "logit": {
+      "reference_auc": 0.5849566960420929,
+      "test_auc_interval": {
+        "mean": 0.5851275990469237,
+        "p025": 0.56416963108927,
+        "p975": 0.6021753476889986,
+        "valid": 2000
+      },
+      "auc": {
+        "mean": 0.5720587226893638,
+        "p025": 0.5262334862716719,
+        "p975": 0.6099017472194977,
+        "valid": 200
+      },
+      "flip_rate": {
+        "mean": 0.16596933187294632,
+        "p025": 0.08762322015334063,
+        "p975": 0.2596385542168675,
+        "valid": 200
+      },
+      "probability_mae": {
+        "mean": 0.10637314083028004,
+        "p025": 0.057670454993766655,
+        "p975": 0.16697143464483535,
+        "valid": 200
+      },
+      "vector_cosine_distance": {
+        "mean": 0.24691023754312375,
+        "p025": 0.06293563892084529,
+        "p975": 0.554894304242259,
+        "valid": 200
+      }
+    },
+    "xgb": {
+      "reference_auc": 0.6123723319974188,
+      "test_auc_interval": {
+        "mean": 0.6020819154348425,
+        "p025": 0.5209916894699503,
+        "p975": 0.6369214105279765,
+        "valid": 2000
+      },
+      "auc": {
+        "mean": 0.6055246954396457,
+        "p025": 0.568369314863182,
+        "p975": 0.6334452513809145,
+        "valid": 200
+      },
+      "flip_rate": {
+        "mean": 0.21315991237677984,
+        "p025": 0.1592552026286966,
+        "p975": 0.2727409638554217,
+        "valid": 200
+      },
+      "probability_mae": {
+        "mean": 0.10766862034797668,
+        "p025": 0.08053725380450487,
+        "p975": 0.1388527326285839,
+        "valid": 200
+      },
+      "vector_cosine_distance": {
+        "mean": 0.08152138531208038,
+        "p025": 0.04932441264390946,
+        "p975": 0.11958868652582169,
+        "valid": 200
+      }
+    }
+  },
+  "paired_auc_difference": {
+    "mean": -0.01695431638791885,
+    "p025": -0.04517569360897844,
+    "p975": 0.06661306860551819,
+    "valid": 2000
+  },
+  "inputs_sha256": {
+    "data/clean.parquet": "b80eccf90f5c8b1a78434250ff153707032d622bb886d306de13aad5b96213ba",
+    "data/features.json": "86cb67f037d1d094c483656335f29f817565e5570a0b609cde342847d2569e56",
+    "data/split.json": "695d46970b1d3b8e65b79fabc61ff423c26f77898bea1791f40f246d8778c4d4",
+    "01_data_models_v0.py": "f4aecbaba269e9cb2d843d7a32d40242b56313e6d562edec9d71b02d33782039"
+  },
+  "versions": {
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "scikit-learn": "1.9.1",
+    "xgboost": "3.4.1"
+  }
+}
