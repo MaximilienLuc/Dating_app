@@ -36,6 +36,14 @@ import json
 import numpy as np
 import pandas as pd
 import joblib
+import pyarrow
+
+assert pyarrow.__version__ == "19.0.0", (
+    f"pyarrow {pyarrow.__version__} chargé au lieu de 19.0.0 -- le pip install ci-dessus n'a "
+    "pas pu remplacer une version déjà importée en mémoire dans cette session. "
+    "Runtime > Redémarrer la session (pas juste relancer la cellule), PUIS relancer ce script "
+    "en entier depuis le début, sinon le fichier écrit sera de nouveau illisible en local."
+)
 
 data = pd.read_parquet("clean.parquet")
 feature_dict = json.load(open("features.json"))
