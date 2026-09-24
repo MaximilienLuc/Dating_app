@@ -25,8 +25,21 @@ def session_sample(groups, rng):
                            for g in rng.choice(unique, len(unique), replace=True)])
 
 
+def model_features(name, contract):
+    """Preserve the contract's feature order, independently for each estimator."""
+    selected = contract.get('features_logit', contract['features']) if name == 'logit' else contract['features']
+    if not isinstance(selected, list) or not selected or not all(isinstance(c, str) for c in selected):
+        raise ValueError(f'{name}: feature list must be a nonempty list of column names')
+    if len(selected) != len(set(selected)):
+        raise ValueError(f'{name}: duplicate features')
+    forbidden = set(contract['protected']) | {contract['target'], 'iid', 'pid', 'wave', 'dec', 'match', 'dec_o'}
+    if forbidden.intersection(selected):
+        raise ValueError('Protected attributes, identifiers or outcomes in features')
+    return list(selected)
+
+
 def validate_contract(data, contract, split):
-    features = contract['features']
+    features = list(dict.fromkeys(model_features('logit', contract) + model_features('xgb', contract)))
     if len(features) != len(set(features)):
         raise ValueError('Duplicate features')
     forbidden = set(contract['protected']) | {'iid', 'pid', 'wave', 'dec', 'match', 'dec_o'}
@@ -106,15 +119,17 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
     data = pd.read_parquet(root / 'data/clean.parquet')
     train, test = validate_contract(data, contract, split)
     features, target = contract['features'], contract['target']
-    X, y = train[features], train[target].to_numpy()
-    Xt, yt = test[features], test[target].to_numpy()
-    reference_sd = X.std(ddof=0).fillna(0).to_numpy()
+    y, yt = train[target].to_numpy(), test[target].to_numpy()
     names = ['logit', 'xgb']
+    features_by_model = {name: model_features(name, contract) for name in names}
+    X = {name: train[features_by_model[name]] for name in names}
+    Xt = {name: test[features_by_model[name]] for name in names}
+    reference_sd = X['logit'].std(ddof=0).fillna(0).to_numpy()
     baselines, scores, vectors = {}, {}, {}
     for name in names:
-        model = model_factory(name, seed).fit(X, y)
+        model = model_factory(name, seed).fit(X[name], y)
         baselines[name] = model
-        scores[name] = model.predict_proba(Xt)[:, 1]
+        scores[name] = model.predict_proba(Xt[name])[:, 1]
         vectors[name] = importance_vector(model, name, reference_sd)
         print(f'{name}: reference AUC {auc_or_nan(yt, scores[name]):.4f}', flush=True)
 
@@ -126,8 +141,8 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
         if np.unique(y[indices]).size < 2:
             raise ValueError('One-class training bootstrap; inspect the dataset')
         for name in names:
-            model = model_factory(name, seed).fit(X.iloc[indices], y[indices])
-            p = model.predict_proba(Xt)[:, 1]
+            model = model_factory(name, seed).fit(X[name].iloc[indices], y[indices])
+            p = model.predict_proba(Xt[name])[:, 1]
             importance = importance_vector(model, name, reference_sd)
             refits.append(dict(model=name, replicate=b, auc=auc_or_nan(yt, p),
                                flip_rate=float(np.mean((p >= threshold) != (scores[name] >= threshold))),
@@ -138,7 +153,7 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
             print(f'{b + 1}/{n_refits} paired training-session refits', flush=True)
     refits = pd.DataFrame(refits)
     betas = np.stack([v for v in coefficients if v is not None])
-    coef = pd.DataFrame({'feature': features, 'reference_beta': vectors['logit'],
+    coef = pd.DataFrame({'feature': features_by_model['logit'], 'reference_beta': vectors['logit'],
                          'p025': np.quantile(betas, .025, axis=0),
                          'p975': np.quantile(betas, .975, axis=0),
                          'sign_agreement': np.mean(np.sign(betas) == np.sign(vectors['logit']), axis=0)})
@@ -159,7 +174,9 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
                                     positive_rate=float(yt[mask].mean()), auc=auc_or_nan(yt[mask], scores[name][mask])))
     summary = {
         'status': 'preliminary_v0', 'models_run': names,
-        'tabpfn': {'status': 'pending', 'reason': 'No TabPFN training implementation in the v0 contract; rerun stability when available.'},
+        'tabicl': {'status': 'pending', 'reason': 'TabICL replaces TabPFN; integrate the agreed training configuration when available.'},
+        'features_by_model': features_by_model,
+        'logit_feature_source': 'features_logit' if 'features_logit' in contract else 'features (legacy fallback; reduced contract not supplied)',
         'train_rows': len(train), 'test_rows': len(test), 'features': len(features),
         'train_waves': sorted(split['train_waves']), 'test_waves': sorted(split['test_waves']),
         'seed': seed, 'threshold': threshold, 'n_refits': n_refits, 'n_eval': n_eval,
@@ -170,15 +187,15 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
             'xgb_vector': 'Normalized gain importance, compared only within XGBoost; not comparable to coefficient distances.',
             'threshold': '0.5 is a provisional display rule, not a tuned business threshold.' if threshold == .5 else 'Externally supplied fixed threshold; this script does not optimize it.',
         },
-        'limitations': ['Only six test sessions: uncertainty estimates are exploratory.',
+        'limitations': [f'Only {test.wave.nunique()} test sessions: uncertainty estimates are exploratory.',
                         'Refit percentile ranges describe sensitivity, not confidence intervals for the best model.',
                         'The v0 feature set includes imprace_A/B; the group must decide whether to retain them.',
                         'Results must be regenerated after any data, feature, model or threshold change.',
-                        'No TabPFN results yet. No fairness or production-readiness conclusion from this analysis.'],
+                        'No TabICL results yet. No fairness or production-readiness conclusion from this analysis.'],
         'models': {},
         'paired_auc_difference': interval(evaluations.logit_minus_xgb),
         'inputs_sha256': {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
-                          for name in ['data/clean.parquet', 'data/features.json', 'data/split.json', '01_data_models_v0.py']},
+                          for name in ['data/clean.parquet', 'data/features.json', 'data/split.json', '01_data_models_v0.py', 'src/stability.py']},
         'versions': {name: importlib.metadata.version(name) for name in ['numpy','pandas','scikit-learn','xgboost']},
     }
     for name in names:

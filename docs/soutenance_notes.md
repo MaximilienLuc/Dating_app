@@ -94,3 +94,22 @@
   alchimie à partir d'un profil pré-rencontre), pas un choix d'algorithme sous-optimal
 - XGBoost retenu comme modèle ML officiel : gère nativement les NaN (pertinent vu le taux de
   missing sur income), permet d'exploiter income_missing_A/B plus finement que RF
+
+
+## Stabilité (Rémi) : contrat de variables par modèle
+- Le logit doit utiliser `contract.get("features_logit", contract["features"])` ; XGBoost
+  conserve `features`. Cela s'applique au modèle de référence, à chaque réentraînement,
+  aux prédictions et aux coefficients exportés. Le split par wave et seed=42 restent inchangés.
+- D'après le message de Blanche, retirer `shar1_1_A` et `shar1_1_B` sert à lever la dépendance
+  entre les six parts de préférences. Les coefficients sont donc à réinterpréter avec une
+  catégorie de référence implicite ; ce retrait ne garantit pas à lui seul l'absence de toute
+  autre colinéarité.
+- Les résultats de stabilité déjà publiés sont historiques, antérieurs au nouveau contrat.
+  Ils ne doivent pas servir de chiffres pour le logit corrigé. Relance en attente de la
+  publication de `features_logit` (absent du main vérifié au commit 4cd5bfe).
+- TabICL remplace TabPFN, conformément à la décision transmise par Blanche. Aucun résultat
+  TabICL de stabilité n'est revendiqué avant disponibilité de sa configuration d'entraînement.
+- Les dépendances de stabilité utilisent désormais les versions épinglées du groupe.
+- Le test final reste hors réglage des variables, des hyperparamètres et du seuil. Les
+  réévaluations de stabilité sont descriptives ; le test a déjà été consulté lors de la v0,
+  il ne serait donc pas exact de le présenter comme totalement inédit à la soutenance.

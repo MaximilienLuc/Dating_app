@@ -1,5 +1,5 @@
 {
-  "status": "preliminary_v0",
+  "status": "historical_pre_feature_update",
   "models_run": [
     "logit",
     "xgb"
