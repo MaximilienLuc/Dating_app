@@ -248,3 +248,15 @@ colonnes redondantes.
   des importances. Il faudrait comparer des configurations prédéfinies en validation interne.
 - Le déplacement du seuil optimal P&L est une extension différée : coûts et seuil métier
   ne sont pas encore fixés. Le taux de bascule actuel utilise le seuil descriptif 0,5.
+
+
+### Résultats de stabilité actualisés
+- Run cloud `36034895577`, code `64b37a5`, données de Blanche `5a3b1b3` :
+  200 réentraînements par modèle (logit/XGBoost), 2 000 bootstraps test appariés (les trois).
+- AUC : logit 0,589 ; XGBoost 0,614 ; TabICL 0,632. Les trois intervalles de différence
+  appariée incluent zéro. Ne pas annoncer de supériorité statistique démontrée.
+- Décisions qui basculent après réentraînement : 16,7% logit, 21,4% XGBoost en moyenne
+  au seuil fixe 0,5. Ce ne sont pas des taux d'erreur. Non mesuré pour TabICL.
+- Ces exports remplacent les anciens résultats gelés ; les remarques d'attente ci-dessus
+  décrivent l'état antérieur de main. L'intégration utilise bien `features_logit` (156 variables)
+  et `features` (158), avec le split original et seed=42.
