@@ -24,7 +24,14 @@ A UPLOADER MANUELLEMENT dans Colab avant de lancer :
   - models/tabicl.joblib -> tabicl.joblib   (le modele deja entraine, pas besoin de refit)
 
 Runtime Colab requis : GPU (le joblib est verrouille sur l'etat CUDA, meme pour predict_proba).
+
+IMPORTANT -- pyarrow epingle a la meme version que requirements.txt (19.0.0) AVANT tout import
+pandas : Colab installe par defaut une version de pyarrow plus recente qui ecrit un format de
+statistiques parquet (histogramme de repetition level) illisible par pyarrow 19 en local
+("Repetition level histogram size mismatch") -- deja rencontre une fois, a ne pas reproduire.
 """
+!pip install -q "pyarrow==19.0.0"
+
 import json
 import numpy as np
 import pandas as pd
