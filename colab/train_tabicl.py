@@ -10,9 +10,11 @@ ou `from google.colab import files; files.upload()`), depuis le repo local :
                                            GroupShuffleSplit entre environnements/versions
                                            de sklearn)
 
-Reproduit le meme split par wave et les 164 features COMPLETES du pipeline principal
-(feature_dict["features"], PAS le sous-ensemble features_logit -- TabICL garde les 6
-preferences comme XGBoost, n'etant pas sensible a leur collinearite).
+Reproduit le meme split par wave et les features COMPLETES du pipeline principal
+(feature_dict["features"], PAS le sous-ensemble feature_dict["features_logit"] -- TabICL
+garde les 6 preferences comme XGBoost, n'etant pas sensible a leur collinearite). Le nombre
+de features suit ce que contient le features.json uploade (158 depuis la correction des
+dummies drop_first=True -- pas de valeur codee en dur ici).
 
 IMPORTANT -- runtime Colab requis : Modifier > Parametres du notebook > GPU.
 `TabICLClassifier.fit()` (tabicl==2.2.0) segfault de facon reproductible sur CPU -- confirme
@@ -58,7 +60,7 @@ data = pd.read_parquet("clean.parquet")
 feature_dict = json.load(open("features.json"))
 split = json.load(open("split.json"))
 
-FEATURES = feature_dict["features"]  # 164 features completes (comme XGBoost)
+FEATURES = feature_dict["features"]  # features completes (comme XGBoost), pas features_logit
 TARGET = feature_dict["target"]
 
 print(f"data: {data.shape} | features: {len(FEATURES)}")
