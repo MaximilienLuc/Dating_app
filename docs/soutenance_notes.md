@@ -65,6 +65,16 @@
 - Stratégie en deux passes : modèles d'abord AVEC income tel quel + mesure de disparité, PUIS
   variante avec income neutralisé/retiré pour tester si la disparité persiste — miroir direct de
   l'argument central du projet foot ("retirer l'attribut protégé ne suffit pas")
+- Décision actée pour le logit : retrait de shar1_1_A et shar1_1_B des features du logit
+  uniquement (XGBoost et TabICL gardent les 6 préférences), pour casser la colinéarité parfaite
+  créée par la contrainte de somme à 100 (confirmée structurelle sur toutes les waves, pas
+  seulement 6-9 — voir "Dérive de protocole entre waves"). **Décision actée, pas encore
+  implémentée dans le code** : features.json n'a pas encore de clé features_logit séparée,
+  build_dataset.py n'a pas encore été modifié (voir "À faire").
+- Alternative plus rigoureuse envisagée puis écartée : transformation centered log-ratio (CLR)
+  sur les 6 préférences — méthodologiquement supérieure pour des données compositionnelles, mais
+  écartée par souci de calendrier (modèles gelés vendredi soir) ; le retrait simple reste
+  défendable pour ce niveau de projet — phrase à avoir prête en Q&A si le sujet vient.
 
 ## Économie / P&L
 - Matrice de coûts : profil montré + oui = +X, profil montré + non = −Y, match manqué = revenu
@@ -72,6 +82,30 @@
 - Seuil de décision à optimiser sur ce P&L plutôt que sur l'AUC seule, avec analyse de
   sensibilité à X et Y — répond à l'exigence officielle du brief de performance "économique" en
   plus de "statistique"
+- Simplification assumée : le P&L est calculé au niveau de la décision individuelle (dec), pas
+  au niveau du vrai match mutuel (match) qui nécessiterait de croiser deux décisions d'une paire
+  — limite documentée, pas cachée
+- Hypothèses de départ : X=2€ (recommandation qui aboutit à un oui), Y=0.5€ (recommandation
+  gâchée) — hypothèses narratives assumées, pas mesurées
+- Seuil de décision optimisé par grille sur GroupKFold (train), jamais sur le test final ; test
+  final touché une seule fois avec le seuil retenu
+- Analyse de sensibilité prévue sur 3 jeux d'hypothèses (X=2/Y=0.5, X=1/Y=1, X=3/Y=0.3) pour
+  vérifier la stabilité du modèle gagnant et du seuil optimal
+
+## Coordination équipe / dette technique
+- Merge avec le travail de stabilité de Rémi fait le 24/09 — split.json identique bit à bit des
+  deux côtés (mêmes train_waves/test_waves), aucun recalcul nécessaire sur ce point
+- features.json aura une clé features_logit séparée de features (retrait shar1_1) une fois
+  l'implémentation faite côté nous (pas encore fait, voir "Feature engineering" et "À faire") —
+  Rémi à prévenir à ce moment-là : son model_factory() (src/stability.py) lit un seul
+  contract['features'] identique pour logit ET xgb, donc il devra explicitement lire
+  features_logit pour le logit et relancer sa stabilité pour qu'elle reflète le retrait de
+  shar1_1
+- model_factory() de Rémi (src/stability.py) duplique la définition des pipelines logit/xgb déjà
+  présente dans 01_data_models_v0.py — dette technique notée, factorisation prévue APRÈS le gel
+  des modèles vendredi soir, pas avant
+- TabICL absent de la stabilité de Rémi pour l'instant (normal, substitution décidée après son
+  travail initial) — à ajouter une fois débloqué de notre côté (voir "À faire")
 
 ## À faire (pas encore réalisé, à ne pas oublier)
 - [ ] Construire la matrice de coûts P&L et implémenter le calcul du profit total pour un seuil
@@ -84,6 +118,15 @@
       field_cd) avant de conclure qu'une seule mitigation suffit
 - [ ] Entraîner une variante des modèles avec income neutralisé/retiré pour comparer la
       disparité avant/après (2e passe de feature engineering fairness)
+- [ ] Implémenter le retrait de shar1_1_A/B pour le logit uniquement dans build_dataset.py +
+      features.json (décision actée, code pas encore fait)
+- [ ] Vérifier/corriger l'encodage des dummies catégorielles (field_cd/career_c/goal) pour
+      confirmer drop_first=True — pas encore vérifié dans le code actuel
+- [ ] VIF de contrôle sur les features finales du logit (résultat en attente, bloqué derrière
+      les deux points ci-dessus)
+- [ ] Débloquer TabICL : crash reproductible (segfault) sur nos données réelles même réduites à
+      quelques colonnes/lignes, cause pas encore identifiée — nécessaire avant de pouvoir
+      comparer les 3 modèles et lancer le P&L sur les 3
 
 
 ## Choix XGBoost vs Random Forest
