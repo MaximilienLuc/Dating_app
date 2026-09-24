@@ -34,8 +34,8 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 | Membre | Rôle |
 |---|---|
 | Blanquette (moi) | **Rôles échangés avec Alex** : données, EDA, les 3 modèles, performance et P&L (voir tout ce document — c'est le travail fait jusqu'ici) |
-| Alex | Rôle échangé avec Blanquette — à confirmer ce qu'il reprend (fairness ?) |
-| Max | Interprétabilité (coefficients, SHAP, LIME, PDP/ICE, permutation importance, XPER) ; `src/metrics.py` ; mail de pré-validation |
+| Alex | Rôle échangé avec Blanquette — à confirmer ce qu'il reprend (pas fairness, c'est Max qui l'a pris) |
+| Max | Interprétabilité (coefficients, SHAP, LIME, PDP/ICE, permutation importance, XPER) ; mail de pré-validation. **A aussi démarré la fairness** (branche `fairness` : TOST, audit racial, `src/metrics.py`, `src/generate_fairness_reports.py`) — rôle réellement couvert plus large que prévu initialement |
 | Remi | Stabilité — **livré et mergé** : bootstrap par session sur logit/xgb (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`). À relancer une fois `features_logit` disponible (retrait shar1_1) ; TabICL à ajouter une fois qu'il aura accès à Colab/CUDA lui aussi |
 | Oli | App Streamlit (deux profils → proba des 3 modèles + SHAP + onglet fairness + onglet stabilité) et template du deck (absent le premier jour) |
 
