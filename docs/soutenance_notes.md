@@ -228,3 +228,23 @@ colonnes redondantes.
 - Le test final reste hors réglage des variables, des hyperparamètres et du seuil. Les
   réévaluations de stabilité sont descriptives ; le test a déjà été consulté lors de la v0,
   il ne serait donc pas exact de le présenter comme totalement inédit à la soutenance.
+
+## Stabilité : intégration des prédictions TabICL (Rémi)
+- Source d'intégration : branche `blanche`, commit `5a3b1b3`. `features_logit` est bien
+  disponible sur cette branche ; le constat d'absence sur main ci-dessus était daté.
+- Trois modèles évalués côté test, deux réentraînés côté train. TabICL est joint par
+  `(iid, pid, wave)` avec contrôle d'unicité, de couverture et de probabilités valides.
+  Aucun chargement de son modèle CUDA et aucun réentraînement TabICL ne sont effectués.
+- Bootstrap par sessions avec remplacement, pas GroupKFold. Les tirages test sont les mêmes
+  pour les trois modèles. TabICL : incertitude de performance uniquement, aucune conclusion
+  sur les changements de décisions ou d'importance après réentraînement.
+- Ajout de la distance euclidienne, en complément de la distance cosinus : coefficients
+  logit exprimés dans une unité commune (écart-type du train original), gains normalisés
+  pour XGBoost. Les distances des deux familles ne se comparent pas directement.
+- Le logit existant utilise déjà la pénalité L2 par défaut de scikit-learn (C=1).
+  Une comparaison Elastic Net ou un autre niveau de régularisation serait une expérience
+  supplémentaire à sélectionner en validation interne par wave, pas sur le test final.
+- Aucun arbitrage performance/stabilité de XGBoost n'est démontré par la seule variance
+  des importances. Il faudrait comparer des configurations prédéfinies en validation interne.
+- Le déplacement du seuil optimal P&L est une extension différée : coûts et seuil métier
+  ne sont pas encore fixés. Le taux de bascule actuel utilise le seuil descriptif 0,5.

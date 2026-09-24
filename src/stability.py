@@ -110,6 +110,23 @@ def interval(values):
                 p975=float(np.quantile(values, .975)), valid=len(values))
 
 
+def frozen_tabicl_predictions(test, predictions):
+    """One-to-one key join; never rely on export row order or load a model."""
+    keys = ['iid', 'pid', 'wave']
+    required = keys + ['tabicl_proba']
+    if set(required) - set(predictions):
+        raise ValueError('TabICL prediction columns missing')
+    if predictions[keys].isna().any().any() or predictions.duplicated(keys).any():
+        raise ValueError('TabICL prediction keys must be non-null and unique')
+    if test.duplicated(keys).any():
+        raise ValueError('Test encounter keys are not unique')
+    joined = test[keys].merge(predictions[required], on=keys, how='left', sort=False, validate='one_to_one')
+    p = joined.tabicl_proba.to_numpy(dtype=float)
+    if not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
+        raise ValueError('Missing, non-finite or out-of-range TabICL test predictions')
+    return p
+
+
 def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
     root, output = Path(root), Path(output)
     if n_refits < 2 or n_eval < 2 or not 0 < threshold < 1:
@@ -147,7 +164,8 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
             refits.append(dict(model=name, replicate=b, auc=auc_or_nan(yt, p),
                                flip_rate=float(np.mean((p >= threshold) != (scores[name] >= threshold))),
                                probability_mae=float(np.mean(np.abs(p - scores[name]))),
-                               vector_cosine_distance=cosine_distance(importance, vectors[name])))
+                               vector_cosine_distance=cosine_distance(importance, vectors[name]),
+                               vector_euclidean_distance=float(np.linalg.norm(importance - vectors[name]))))
             coefficients.append(importance if name == 'logit' else None)
         if (b + 1) % 20 == 0 or b + 1 == n_refits:
             print(f'{b + 1}/{n_refits} paired training-session refits', flush=True)
@@ -158,23 +176,32 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
                          'p975': np.quantile(betas, .975, axis=0),
                          'sign_agreement': np.mean(np.sign(betas) == np.sign(vectors['logit']), axis=0)})
 
+    prediction_path = root / 'data/tabicl_predictions.parquet'
+    if prediction_path.exists():
+        scores['tabicl'] = frozen_tabicl_predictions(test, pd.read_parquet(prediction_path))
+    evaluated_names = list(scores)
+
     # Separate test uncertainty: fixed fitted models, resampling only test sessions.
     rng_eval = np.random.default_rng(seed + 1)
     evaluations = []
     for b in range(n_eval):
         idx = session_sample(test.wave, rng_eval)
-        a, z = (auc_or_nan(yt[idx], scores[n][idx]) for n in names)
-        evaluations.append(dict(replicate=b, logit_auc=a, xgb_auc=z, logit_minus_xgb=a-z))
+        row = {'replicate': b, **{f'{name}_auc': auc_or_nan(yt[idx], scores[name][idx]) for name in evaluated_names}}
+        for i, left in enumerate(evaluated_names):
+            for right in evaluated_names[i+1:]:
+                row[f'{left}_minus_{right}'] = row[f'{left}_auc'] - row[f'{right}_auc']
+        evaluations.append(row)
     evaluations = pd.DataFrame(evaluations)
     per_session = []
     for wave in sorted(test.wave.unique()):
         mask = test.wave.to_numpy() == wave
-        for name in names:
+        for name in evaluated_names:
             per_session.append(dict(model=name, wave=int(wave), n=int(mask.sum()),
                                     positive_rate=float(yt[mask].mean()), auc=auc_or_nan(yt[mask], scores[name][mask])))
     summary = {
-        'status': 'preliminary_v0', 'models_run': names,
-        'tabicl': {'status': 'pending', 'reason': 'TabICL replaces TabPFN; integrate the agreed training configuration when available.'},
+        'status': 'current_feature_contract', 'models_run': evaluated_names,
+        'models_refitted': names, 'models_test_evaluated': evaluated_names,
+        'tabicl': {'status': 'test_only' if 'tabicl' in scores else 'pending', 'reason': 'Frozen predictions only; no training resamples, decision-flip analysis or importance-vector distances for TabICL.'},
         'features_by_model': features_by_model,
         'logit_feature_source': 'features_logit' if 'features_logit' in contract else 'features (legacy fallback; reduced contract not supplied)',
         'train_rows': len(train), 'test_rows': len(test), 'features': len(features),
@@ -191,19 +218,21 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
                         'Refit percentile ranges describe sensitivity, not confidence intervals for the best model.',
                         'The v0 feature set includes imprace_A/B; the group must decide whether to retain them.',
                         'Results must be regenerated after any data, feature, model or threshold change.',
-                        'No TabICL results yet. No fairness or production-readiness conclusion from this analysis.'],
+                        'TabICL is evaluated on frozen predictions only, not training sensitivity. No production-readiness conclusion.'],
         'models': {},
         'paired_auc_difference': interval(evaluations.logit_minus_xgb),
+        'paired_auc_differences': {c: interval(evaluations[c]) for c in evaluations if '_minus_' in c},
         'inputs_sha256': {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
-                          for name in ['data/clean.parquet', 'data/features.json', 'data/split.json', '01_data_models_v0.py', 'src/stability.py']},
+                          for name in ['data/clean.parquet', 'data/features.json', 'data/split.json', '01_data_models_v0.py', 'src/stability.py'] + (['data/tabicl_predictions.parquet'] if prediction_path.exists() else [])},
         'versions': {name: importlib.metadata.version(name) for name in ['numpy','pandas','scikit-learn','xgboost']},
     }
-    for name in names:
+    for name in evaluated_names:
         subset = refits[refits.model == name]
         summary['models'][name] = {
             'reference_auc': auc_or_nan(yt, scores[name]),
             'test_auc_interval': interval(evaluations[f'{name}_auc']),
-            **{col: interval(subset[col]) for col in ['auc','flip_rate','probability_mae','vector_cosine_distance']},
+            **{col: interval(subset[col]) for col in ['auc','flip_rate','probability_mae','vector_cosine_distance','vector_euclidean_distance'] if name in names},
+            'training_stability_available': name in names,
         }
     output.mkdir(parents=True, exist_ok=True)
     refits.to_csv(output/'refits.csv', index=False)

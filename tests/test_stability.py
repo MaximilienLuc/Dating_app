@@ -112,6 +112,9 @@ def test_run_uses_model_specific_columns_for_reference_and_every_refit(tmp_path,
     (tmp_path/'data/split.json').write_text(json.dumps(s))
     (tmp_path/'01_data_models_v0.py').write_text('# fixture')
     (tmp_path/'src/stability.py').write_text('# fixture')
+    frozen=d[['iid','pid','wave']].copy()
+    frozen['tabicl_proba']=[.2,.8,.3,.7]
+    frozen.iloc[::-1].to_parquet(tmp_path/'data/tabicl_predictions.parquet',index=False)
     seen=[]
     class Estimator:
         def __init__(self,name): self.name=name
@@ -128,5 +131,31 @@ def test_run_uses_model_specific_columns_for_reference_and_every_refit(tmp_path,
     monkeypatch.setattr(stability,'importance_vector',lambda model,name,sd:np.ones(len(model.columns)))
     report=stability.run(tmp_path,tmp_path/'results',n_refits=2,n_eval=2)
     assert seen.count('logit')==3 and seen.count('xgb')==3
+    assert set(seen)=={'logit','xgb'}
+    assert report['tabicl']['status']=='test_only'
+    assert 'flip_rate' not in report['models']['tabicl']
+    assert report['models']['tabicl']['reference_auc']==1.0
+    assert 'logit_minus_tabicl' in report['paired_auc_differences']
     assert report['features_by_model']=={'logit':['x'],'xgb':['x','extra']}
     assert pd.read_csv(tmp_path/'results/logit_coefficients.csv').feature.tolist()==['x']
+
+
+def test_tabicl_key_join_restores_test_order_and_allows_train_rows():
+    from src.stability import frozen_tabicl_predictions
+    d,_,_=contract()
+    predictions=d[['iid','pid','wave']].copy()
+    predictions['tabicl_proba']=[.1,.2,.3,.4]
+    np.testing.assert_allclose(frozen_tabicl_predictions(d.iloc[2:],predictions.iloc[::-1]),[.3,.4])
+
+
+@pytest.mark.parametrize('failure',['duplicate','missing','nan','range'])
+def test_tabicl_rejects_bad_predictions(failure):
+    from src.stability import frozen_tabicl_predictions
+    d,_,_=contract()
+    p=d[['iid','pid','wave']].copy()
+    p['tabicl_proba']=.5
+    if failure=='duplicate': p=pd.concat([p,p.iloc[:1]])
+    if failure=='missing': p=p.iloc[1:]
+    if failure=='nan': p.loc[0,'tabicl_proba']=np.nan
+    if failure=='range': p.loc[0,'tabicl_proba']=1.1
+    with pytest.raises(ValueError): frozen_tabicl_predictions(d,p)

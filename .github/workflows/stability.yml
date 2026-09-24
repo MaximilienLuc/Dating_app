@@ -1,5 +1,7 @@
 name: Stability analysis
 on:
+  push:
+    branches: [remi/stability-tabicl]
   pull_request:
     paths:
       - 'src/stability.py'
@@ -30,14 +32,14 @@ jobs:
       - run: pip install -r requirements-stability.txt
       - run: python -m pytest tests/test_stability.py -q
       - name: Require the reduced logit contract for publication
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         run: python -c 'import json; c=json.load(open("data/features.json")); assert "features_logit" in c, "features_logit is not published yet; do not regenerate obsolete logit results"'
-      - if: github.event_name == 'workflow_dispatch'
+      - if: github.event_name != 'pull_request'
         run: python -m src.stability --refits 200 --eval-bootstrap 2000
-      - if: github.event_name == 'workflow_dispatch'
+      - if: github.event_name != 'pull_request'
         run: jupyter nbconvert --to notebook --execute 04_stability.ipynb --output 04_stability.executed.ipynb --ExecutePreprocessor.timeout=180
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         with:
           name: stability-results
           path: |
