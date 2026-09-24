@@ -37,6 +37,7 @@ data, feature_dict = load_and_clean()
 data, feature_dict = engineer_features(data, feature_dict)
 
 FEATURES = feature_dict["features"]
+FEATURES_LOGIT = feature_dict["features_logit"]  # FEATURES moins shar1_1_A/B (colinéarité)
 PROTECTED = feature_dict["protected"]
 BORDERLINE = feature_dict["borderline"]
 BORDERLINE_REASONS = feature_dict["borderline_reasons"]
@@ -56,6 +57,7 @@ print("Sessions test :", test_waves, "| lignes train/test :", len(tr_idx), len(t
 
 X_tr, y_tr = data.iloc[tr_idx][FEATURES], data.iloc[tr_idx]["dec"]
 X_te, y_te = data.iloc[te_idx][FEATURES], data.iloc[te_idx]["dec"]
+X_tr_logit, X_te_logit = X_tr[FEATURES_LOGIT], X_te[FEATURES_LOGIT]
 
 # ---------------------------------------------------------------------------
 # 6. Sauvegarde du contrat de fichiers
@@ -76,8 +78,8 @@ results = {}
 
 logit = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(),
                       LogisticRegression(max_iter=5000))
-logit.fit(X_tr, y_tr)
-results["logit"] = roc_auc_score(y_te, logit.predict_proba(X_te)[:, 1])
+logit.fit(X_tr_logit, y_tr)  # FEATURES_LOGIT : sans shar1_1_A/B (colinéarité, cf. build_dataset.py)
+results["logit"] = roc_auc_score(y_te, logit.predict_proba(X_te_logit)[:, 1])
 joblib.dump(logit, MODELS / "logit.joblib")
 
 xgb = XGBClassifier(n_estimators=400, max_depth=4, learning_rate=0.05, subsample=0.8,
@@ -134,24 +136,29 @@ def audit_missingness(df, cols=("fit_score", "income_A", "income_B"), wave_col="
     return report
 
 
-def audit_groupkfold_vs_single_split(df, features, target="dec", group_col="wave", seed=SEED):
+def audit_groupkfold_vs_single_split(df, features, features_logit, target="dec", group_col="wave", seed=SEED):
     """Pourquoi : le split unique (GroupShuffleSplit, section 5) tire au hasard 25%
     des sessions en test -- un seul tirage peut tomber sur des waves atypiques par
     chance. La validation croisée GroupKFold (5 folds sur wave) donne une AUC
     moyenne + un écart-type, pour juger si l'AUC du split unique est représentative
     ou juste un coup de chance/malchance.
+
+    logit entraîné sur `features_logit` (sans shar1_1_A/B), xgb sur `features` (complet) --
+    même distinction que la section 7, pour rester cohérent avec le modèle réellement sauvegardé.
     """
     X, y, groups = df[features], df[target], df[group_col]
+    X_logit = df[features_logit]
     gkf = GroupKFold(n_splits=5)
     aucs = {"logit": [], "xgb": []}
     for tr_idx, te_idx in gkf.split(X, y, groups=groups):
         X_tr_f, X_te_f = X.iloc[tr_idx], X.iloc[te_idx]
+        X_tr_fl, X_te_fl = X_logit.iloc[tr_idx], X_logit.iloc[te_idx]
         y_tr_f, y_te_f = y.iloc[tr_idx], y.iloc[te_idx]
 
         m_logit = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(),
                                  LogisticRegression(max_iter=5000))
-        m_logit.fit(X_tr_f, y_tr_f)
-        aucs["logit"].append(roc_auc_score(y_te_f, m_logit.predict_proba(X_te_f)[:, 1]))
+        m_logit.fit(X_tr_fl, y_tr_f)
+        aucs["logit"].append(roc_auc_score(y_te_f, m_logit.predict_proba(X_te_fl)[:, 1]))
 
         m_xgb = XGBClassifier(n_estimators=400, max_depth=4, learning_rate=0.05, subsample=0.8,
                                colsample_bytree=0.8, eval_metric="logloss", random_state=seed)
@@ -229,6 +236,31 @@ def audit_income_race_anova(df):
     return report
 
 
+def audit_vif(df, features, threshold=10.0):
+    """Pourquoi : après avoir retiré shar1_1_A/B pour lever la colinéarité parfaite entre les 6
+    préférences (cf. engineer_features()), on vérifie qu'il ne reste pas d'autre colinéarité
+    problématique parmi les features réellement utilisées par le logit -- VIF > 10 est le seuil
+    usuel de colinéarité forte. Imputation médiane (même stratégie que le pipeline logit)
+    avant calcul, sur les lignes de train uniquement (mêmes données que le logit entraîné).
+    """
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    from statsmodels.tools import add_constant
+
+    X_imp = SimpleImputer(strategy="median").fit_transform(df[features])
+    X = add_constant(pd.DataFrame(X_imp, columns=features), has_constant="add")
+
+    vifs = {col: variance_inflation_factor(X.values, i)
+            for i, col in enumerate(X.columns) if col != "const"}
+    vif_series = pd.Series(vifs).sort_values(ascending=False)
+    high = vif_series[vif_series > threshold]
+
+    print(f"\n--- Audit VIF (features logit, seuil={threshold}) ---")
+    print(f"{len(high)}/{len(features)} variables avec VIF > {threshold} :")
+    print(high.round(1).to_string() if len(high) else "aucune")
+    return vif_series
+
+
 missingness_report = audit_missingness(data)
-groupkfold_report = audit_groupkfold_vs_single_split(data, FEATURES)
+groupkfold_report = audit_groupkfold_vs_single_split(data, FEATURES, FEATURES_LOGIT)
 anova_report = audit_income_race_anova(data)
+vif_report = audit_vif(data.iloc[tr_idx], FEATURES_LOGIT)

@@ -36,9 +36,16 @@
 
 | Modèle | AUC test (split unique) | AUC GroupKFold (5 folds, moyenne ± écart-type) |
 |---|---|---|
-| Logit | 0.587 | 0.603 ± 0.024 |
-| XGBoost | 0.604 | 0.599 ± 0.021 |
+| Logit | 0.589 | 0.603 ± 0.024 |
+| XGBoost | 0.611 | 0.599 ± 0.024 |
 | TabICL | 0.638 | 0.591 ± 0.039 |
+
+⚠️ **Comparaison pas parfaitement à iso-features** : logit/XGBoost ci-dessus utilisent le
+schéma de features actuel (post-correction dummies `drop_first`, 158 features/156 pour le
+logit). Les chiffres TabICL datent d'avant cette correction (schéma à 164 features, Colab) --
+pas encore réentraîné avec le nouveau `features.json`. Écart attendu faible (la correction
+retire des colonnes redondantes, pas d'information), mais à refaire sur Colab avant de citer
+ces chiffres comme définitifs.
 
 - Les 3 modèles convergent vers le même plafond ~0.59-0.60 en GroupKFold, malgré des
   architectures très différentes (linéaire, arbres boostés, transformer en in-context
@@ -81,12 +88,30 @@
 - Stratégie en deux passes : modèles d'abord AVEC income tel quel + mesure de disparité, PUIS
   variante avec income neutralisé/retiré pour tester si la disparité persiste — miroir direct de
   l'argument central du projet foot ("retirer l'attribut protégé ne suffit pas")
-- Décision actée pour le logit : retrait de shar1_1_A et shar1_1_B des features du logit
-  uniquement (XGBoost et TabICL gardent les 6 préférences), pour casser la colinéarité parfaite
-  créée par la contrainte de somme à 100 (confirmée structurelle sur toutes les waves, pas
-  seulement 6-9 — voir "Dérive de protocole entre waves"). **Décision actée, pas encore
-  implémentée dans le code** : features.json n'a pas encore de clé features_logit séparée,
-  build_dataset.py n'a pas encore été modifié (voir "À faire").
+- **Implémenté** : retrait de shar1_1_A et shar1_1_B des features du logit uniquement
+  (XGBoost et TabICL gardent les 6 préférences) — `feature_dict["features_logit"]`
+  (`features.json`), construit dans `engineer_features()`. Casse la colinéarité parfaite créée
+  par la contrainte de somme à 100 (confirmée structurelle sur toutes les waves, pas seulement
+  6-9 — voir "Dérive de protocole entre waves"). AUC quasi inchangée après le retrait (logit
+  0.589 split unique / 0.603±0.024 GroupKFold, contre 0.587/0.603±0.024 avant).
+- **Implémenté** : encodage des catégorielles (field_cd/career_c/goal) en one-hot avec
+  `drop_first=True` sur un vocabulaire de catégories FIXE (`CAT_CODES` dans
+  `src/build_dataset.py`, pas les valeurs observées) — garantit des colonnes identiques quel
+  que soit le sous-échantillon, et un encodage non basé sur une statistique calculée sur les
+  données (donc pas de fuite). La catégorie "1" de chaque variable est la référence implicite.
+- **VIF de contrôle fait** sur les 156 features finales du logit : 19 variables > 10, dont 8 à
+  l'infini. Diagnostiqué avant de conclure : `age_diff`/`age_A`/`age_B` (55/32/32) et
+  `fit_score`/`attr1_1_A` (12-15) sont des colinéarités structurelles attendues (age_diff =
+  age_B - age_A ; fit_score construit à partir de attr1_1_A). Les VIF infinis sont deux paires
+  de colonnes **exactement identiques**, propres au petit effectif de ce split train : (1)
+  `field_cd_A_17` ≡ `career_c_A_17` (les 10 personnes étudiant l'architecture en train visent
+  toutes aussi une carrière d'architecte — mêmes lignes, mêmes côtés A et B) ; (2)
+  `field_cd_A_NA` ≡ `goal_A_NA` (les 58 personnes n'ayant pas renseigné leur domaine d'études
+  sont exactement celles n'ayant pas non plus renseigné leur objectif de la soirée — tout un
+  bloc du questionnaire sauté ensemble, mêmes côtés A et B). **Décision : documenté tel quel,
+  pas corrigé** (fusion des catégories concernées écartée faute de temps) — deux coefficients
+  du logit seront indéterminés/redondants dans ces paires, sans remettre en cause le reste du
+  modèle.
 - Alternative plus rigoureuse envisagée puis écartée : transformation centered log-ratio (CLR)
   sur les 6 préférences — méthodologiquement supérieure pour des données compositionnelles, mais
   écartée par souci de calendrier (modèles gelés vendredi soir) ; le retrait simple reste
@@ -133,12 +158,14 @@
 ## Coordination équipe / dette technique
 - Merge avec le travail de stabilité de Rémi fait le 24/09 — split.json identique bit à bit des
   deux côtés (mêmes train_waves/test_waves), aucun recalcul nécessaire sur ce point
-- features.json aura une clé features_logit séparée de features (retrait shar1_1) une fois
-  l'implémentation faite côté nous (pas encore fait, voir "Feature engineering" et "À faire") —
-  Rémi à prévenir à ce moment-là : son model_factory() (src/stability.py) lit un seul
-  contract['features'] identique pour logit ET xgb, donc il devra explicitement lire
-  features_logit pour le logit et relancer sa stabilité pour qu'elle reflète le retrait de
-  shar1_1
+- **features.json a maintenant une clé features_logit** séparée de features (retrait shar1_1,
+  voir "Feature engineering") — **Rémi à prévenir** : son model_factory() (src/stability.py)
+  lit un seul contract['features'] identique pour logit ET xgb, donc il devra explicitement
+  lire features_logit pour le logit et relancer sa stabilité pour qu'elle reflète le retrait
+  de shar1_1. Le schéma de dummies a aussi changé (drop_first=True, 158 features au lieu de
+  164) : sa stabilité est à relancer de toute façon, pas seulement pour shar1_1.
+- **Max à prévenir aussi** (pas encore fait) : même chose pour toute interprétabilité déjà
+  commencée sur le logit avec l'ancien schéma de features (voir "À faire")
 - model_factory() de Rémi (src/stability.py) duplique la définition des pipelines logit/xgb déjà
   présente dans 01_data_models_v0.py — dette technique notée, factorisation prévue APRÈS le gel
   des modèles vendredi soir, pas avant
@@ -158,14 +185,20 @@
       field_cd) avant de conclure qu'une seule mitigation suffit
 - [ ] Entraîner une variante des modèles avec income neutralisé/retiré pour comparer la
       disparité avant/après (2e passe de feature engineering fairness)
-- [ ] Implémenter le retrait de shar1_1_A/B pour le logit uniquement dans build_dataset.py +
-      features.json (décision actée, code pas encore fait)
-- [ ] Vérifier/corriger l'encodage des dummies catégorielles (field_cd/career_c/goal) pour
-      confirmer drop_first=True — pas encore vérifié dans le code actuel
-- [ ] VIF de contrôle sur les features finales du logit (résultat en attente, bloqué derrière
-      les deux points ci-dessus)
+- [x] Implémenter le retrait de shar1_1_A/B pour le logit uniquement — fait,
+      `feature_dict["features_logit"]` dans `src/build_dataset.py`
+- [x] Vérifier/corriger l'encodage des dummies catégorielles (field_cd/career_c/goal),
+      drop_first=True — fait, vocabulaire fixe (`CAT_CODES`) dans `src/build_dataset.py`
+- [x] VIF de contrôle sur les features finales du logit — fait, voir "Feature engineering" ;
+      2 paires de colonnes à VIF infini documentées comme limite connue (petits effectifs),
+      pas corrigées faute de temps
 - [x] Débloquer TabICL et comparer les 3 modèles — fait via Colab/CUDA, voir "TabICL —
       diagnostic du crash CPU et décision" et le tableau dans "Validation croisée"
+- [ ] Réentraîner TabICL sur Colab avec le features.json post-correction dummies (158
+      features au lieu de 164) pour une comparaison à iso-features parfaite
+- [ ] Prévenir Max : le logit a maintenant un features_logit distinct de features -- toute
+      interprétation (SHAP/coefficients) du logit déjà commencée sur l'ancien schéma sera à
+      refaire
 - [ ] Lancer le P&L sur les 3 modèles (dépend de "Construire la matrice de coûts P&L" plus haut)
 
 
