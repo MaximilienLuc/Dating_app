@@ -1,0 +1,9 @@
+{
+  "run_url": "https://github.com/MaximilienLuc/Dating_app/actions/runs/35986538526",
+  "source_commit": "a54aceb65f178cfa4a6ecac8c96060317f955dd5",
+  "script_sha256": "2023880ed7b24ed2634f7f7566b9c74a3c55d785dade5da305c3d7432e971c87",
+  "runner": "ubuntu-latest",
+  "python_requested": "3.12",
+  "notebook_note": "Executed in GitHub Actions. Markdown links to the exported charts were then added for GitHub viewing; numerical outputs are unchanged.",
+  "cross_platform_check": "Local macOS pilot XGBoost reference AUC 0.6042; Linux cloud reference AUC 0.6124 with the same declared package versions and hyperparameters. The cause of this difference has not been isolated; report these exports as the cloud run, not a bit-identical reproduction of the saved models."
+}
