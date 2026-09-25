@@ -1,0 +1,134 @@
+{
+  "xgb_baseline": {
+    "threshold": 0.37,
+    "exposure_rate": 0.5953,
+    "global_fairness": false,
+    "n_racial_tests_passed": 0,
+    "n_racial_tests_total": 4,
+    "tost_race": {
+      "caucasian_vs_black": {
+        "is_fair": false,
+        "gap": -0.061052923631823575,
+        "n_ref": 1109,
+        "n_comp": 130
+      },
+      "caucasian_vs_latino": {
+        "is_fair": false,
+        "gap": -0.12487058744948731,
+        "n_ref": 1109,
+        "n_comp": 135
+      },
+      "caucasian_vs_asian": {
+        "is_fair": false,
+        "gap": 0.15039700751120222,
+        "n_ref": 1109,
+        "n_comp": 391
+      },
+      "caucasian_vs_other": {
+        "is_fair": false,
+        "gap": 0.09801301043411048,
+        "n_ref": 1109,
+        "n_comp": 56
+      }
+    }
+  },
+  "xgb_mitigated": {
+    "threshold": 0.36,
+    "exposure_rate": 0.6106,
+    "global_fairness": false,
+    "n_racial_tests_passed": 0,
+    "n_racial_tests_total": 4,
+    "tost_race": {
+      "caucasian_vs_black": {
+        "is_fair": false,
+        "gap": 0.039793299576888375,
+        "n_ref": 1109,
+        "n_comp": 130
+      },
+      "caucasian_vs_latino": {
+        "is_fair": false,
+        "gap": -0.13826937848578968,
+        "n_ref": 1109,
+        "n_comp": 135
+      },
+      "caucasian_vs_asian": {
+        "is_fair": false,
+        "gap": 0.15128257756233005,
+        "n_ref": 1109,
+        "n_comp": 391
+      },
+      "caucasian_vs_other": {
+        "is_fair": false,
+        "gap": -0.08218472240113361,
+        "n_ref": 1109,
+        "n_comp": 56
+      }
+    }
+  },
+  "logit_baseline": {
+    "threshold": 0.26,
+    "exposure_rate": 0.7558,
+    "global_fairness": false,
+    "n_racial_tests_passed": 0,
+    "n_racial_tests_total": 4,
+    "tost_race": {
+      "caucasian_vs_black": {
+        "is_fair": false,
+        "gap": -0.10903100506346675,
+        "n_ref": 1109,
+        "n_comp": 130
+      },
+      "caucasian_vs_latino": {
+        "is_fair": false,
+        "gap": -0.1959255919580537,
+        "n_ref": 1109,
+        "n_comp": 135
+      },
+      "caucasian_vs_asian": {
+        "is_fair": false,
+        "gap": 0.07729596719700926,
+        "n_ref": 1109,
+        "n_comp": 391
+      },
+      "caucasian_vs_other": {
+        "is_fair": false,
+        "gap": -0.14804199407445584,
+        "n_ref": 1109,
+        "n_comp": 56
+      }
+    }
+  },
+  "logit_mitigated": {
+    "threshold": 0.28,
+    "exposure_rate": 0.7322,
+    "global_fairness": false,
+    "n_racial_tests_passed": 0,
+    "n_racial_tests_total": 4,
+    "tost_race": {
+      "caucasian_vs_black": {
+        "is_fair": false,
+        "gap": -0.0863217035444267,
+        "n_ref": 1109,
+        "n_comp": 130
+      },
+      "caucasian_vs_latino": {
+        "is_fair": false,
+        "gap": -0.1971479143706375,
+        "n_ref": 1109,
+        "n_comp": 135
+      },
+      "caucasian_vs_asian": {
+        "is_fair": false,
+        "gap": 0.07431178061846921,
+        "n_ref": 1109,
+        "n_comp": 391
+      },
+      "caucasian_vs_other": {
+        "is_fair": false,
+        "gap": -0.1714865387092619,
+        "n_ref": 1109,
+        "n_comp": 56
+      }
+    }
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "candidate_proxies_dropped": [
+    "attr3_1_B",
+    "career_c_B_12",
+    "go_out_B",
+    "intel3_1_B"
+  ],
+  "n_features_baseline": 164,
+  "n_features_mitigated": 160,
+  "cost_matrix_params": {
+    "gain_tp": 2.0,
+    "cost_fp": -1.0,
+    "cost_fn": -1.0
+  },
+  "xgb": {
+    "baseline": {
+      "auc": 0.6041,
+      "pnl_optimal_threshold": 286.0,
+      "pnl_threshold_50": -133.0,
+      "optimal_threshold": 0.37,
+      "tost_race": {
+        "caucasian_vs_black": {
+          "is_fair": true,
+          "gap": 0.020843448706388323,
+          "n_ref": 1109,
+          "n_comp": 130
+        },
+        "caucasian_vs_latino": {
+          "is_fair": false,
+          "gap": -0.10707677921383962,
+          "n_ref": 1109,
+          "n_comp": 135
+        },
+        "caucasian_vs_asian": {
+          "is_fair": false,
+          "gap": 0.11124281915690964,
+          "n_ref": 1109,
+          "n_comp": 391
+        },
+        "caucasian_vs_other": {
+          "is_fair": false,
+          "gap": 0.09914015200309162,
+          "n_ref": 1109,
+          "n_comp": 56
+        }
+      }
+    },
+    "mitigated": {
+      "auc": 0.6118,
+      "pnl_optimal_threshold": 290.0,
+      "pnl_threshold_50": -163.0,
+      "optimal_threshold": 0.36,
+      "tost_race": {
+        "caucasian_vs_black": {
+          "is_fair": true,
+          "gap": 0.0019629603939793627,
+          "n_ref": 1109,
+          "n_comp": 130
+        },
+        "caucasian_vs_latino": {
+          "is_fair": false,
+          "gap": -0.11911966068864172,
+          "n_ref": 1109,
+          "n_comp": 135
+        },
+        "caucasian_vs_asian": {
+          "is_fair": false,
+          "gap": 0.1076682525442843,
+          "n_ref": 1109,
+          "n_comp": 391
+        },
+        "caucasian_vs_other": {
+          "is_fair": false,
+          "gap": -0.006553523122504179,
+          "n_ref": 1109,
+          "n_comp": 56
+        }
+      }
+    },
+    "delta": {
+      "auc": 0.0077,
+      "pnl": 4.0
+    }
+  },
+  "logit": {
+    "baseline": {
+      "auc": 0.5874,
+      "pnl_optimal_threshold": 389.0,
+      "optimal_threshold": 0.26,
+      "tost_race": {
+        "caucasian_vs_black": {
+          "is_fair": false,
+          "gap": -0.03210099188458071,
+          "n_ref": 1109,
+          "n_comp": 130
+        },
+        "caucasian_vs_latino": {
+          "is_fair": false,
+          "gap": -0.18765654744013627,
+          "n_ref": 1109,
+          "n_comp": 135
+        },
+        "caucasian_vs_asian": {
+          "is_fair": false,
+          "gap": 0.10191435338396149,
+          "n_ref": 1109,
+          "n_comp": 391
+        },
+        "caucasian_vs_other": {
+          "is_fair": false,
+          "gap": -0.042815277598866386,
+          "n_ref": 1109,
+          "n_comp": 56
+        }
+      }
+    },
+    "mitigated": {
+      "auc": 0.5805,
+      "pnl_optimal_threshold": 352.0,
+      "optimal_threshold": 0.28,
+      "tost_race": {
+        "caucasian_vs_black": {
+          "is_fair": false,
+          "gap": -0.06743427897620868,
+          "n_ref": 1109,
+          "n_comp": 130
+        },
+        "caucasian_vs_latino": {
+          "is_fair": false,
+          "gap": -0.16942858097051067,
+          "n_ref": 1109,
+          "n_comp": 135
+        },
+        "caucasian_vs_asian": {
+          "is_fair": false,
+          "gap": 0.08204437536178072,
+          "n_ref": 1109,
+          "n_comp": 391
+        },
+        "caucasian_vs_other": {
+          "is_fair": false,
+          "gap": -0.0855661471080768,
+          "n_ref": 1109,
+          "n_comp": 56
+        }
+      }
+    },
+    "delta": {
+      "auc": -0.007,
+      "pnl": -37.0
+    }
+  }
+}

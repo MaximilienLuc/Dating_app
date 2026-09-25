@@ -1,0 +1,236 @@
+{
+  "raw_rates_data": {
+    "black": {
+      "rate": 0.46153846153846156,
+      "n": 130
+    },
+    "caucasian": {
+      "rate": 0.43913435527502254,
+      "n": 1109
+    },
+    "latino": {
+      "rate": 0.5037037037037037,
+      "n": 135
+    },
+    "asian": {
+      "rate": 0.35294117647058826,
+      "n": 391
+    },
+    "other": {
+      "rate": 0.48214285714285715,
+      "n": 56
+    }
+  },
+  "models": {
+    "XGBoost (t=0.50)": {
+      "threshold": 0.5,
+      "exposure_rate_cauc": 0.358,
+      "global_fairness": false,
+      "groups": {
+        "black": {
+          "gap_data": -2.24,
+          "gap_model": 1.95,
+          "bias_algo": 4.19,
+          "is_fair_tost": true,
+          "n": 130
+        },
+        "latino": {
+          "gap_data": -6.46,
+          "gap_model": -8.65,
+          "bias_algo": -2.19,
+          "is_fair_tost": false,
+          "n": 135
+        },
+        "asian": {
+          "gap_data": 8.62,
+          "gap_model": 10.73,
+          "bias_algo": 2.11,
+          "is_fair_tost": false,
+          "n": 391
+        },
+        "other": {
+          "gap_data": -4.3,
+          "gap_model": -3.49,
+          "bias_algo": 0.81,
+          "is_fair_tost": false,
+          "n": 56
+        }
+      }
+    },
+    "XGBoost (t*=0.38)": {
+      "threshold": 0.38,
+      "exposure_rate_cauc": 0.5735,
+      "global_fairness": false,
+      "groups": {
+        "black": {
+          "gap_data": -2.24,
+          "gap_model": -4.19,
+          "bias_algo": -1.95,
+          "is_fair_tost": false,
+          "n": 130
+        },
+        "latino": {
+          "gap_data": -6.46,
+          "gap_model": -12.28,
+          "bias_algo": -5.82,
+          "is_fair_tost": false,
+          "n": 135
+        },
+        "asian": {
+          "gap_data": 8.62,
+          "gap_model": 12.08,
+          "bias_algo": 3.46,
+          "is_fair_tost": false,
+          "n": 391
+        },
+        "other": {
+          "gap_data": -4.3,
+          "gap_model": 0.21,
+          "bias_algo": 4.51,
+          "is_fair_tost": false,
+          "n": 56
+        }
+      }
+    },
+    "Logit (t=0.50)": {
+      "threshold": 0.5,
+      "exposure_rate_cauc": 0.3661,
+      "global_fairness": false,
+      "groups": {
+        "black": {
+          "gap_data": -2.24,
+          "gap_model": -3.39,
+          "bias_algo": -1.15,
+          "is_fair_tost": false,
+          "n": 130
+        },
+        "latino": {
+          "gap_data": -6.46,
+          "gap_model": -18.95,
+          "bias_algo": -12.49,
+          "is_fair_tost": false,
+          "n": 135
+        },
+        "asian": {
+          "gap_data": 8.62,
+          "gap_model": 10.01,
+          "bias_algo": 1.39,
+          "is_fair_tost": false,
+          "n": 391
+        },
+        "other": {
+          "gap_data": -4.3,
+          "gap_model": -4.46,
+          "bias_algo": -0.16,
+          "is_fair_tost": false,
+          "n": 56
+        }
+      }
+    },
+    "Logit (t*=0.25)": {
+      "threshold": 0.25,
+      "exposure_rate_cauc": 0.7556,
+      "global_fairness": false,
+      "groups": {
+        "black": {
+          "gap_data": -2.24,
+          "gap_model": -9.05,
+          "bias_algo": -6.81,
+          "is_fair_tost": false,
+          "n": 130
+        },
+        "latino": {
+          "gap_data": -6.46,
+          "gap_model": -19.25,
+          "bias_algo": -12.79,
+          "is_fair_tost": false,
+          "n": 135
+        },
+        "asian": {
+          "gap_data": 8.62,
+          "gap_model": 7.02,
+          "bias_algo": -1.6,
+          "is_fair_tost": false,
+          "n": 391
+        },
+        "other": {
+          "gap_data": -4.3,
+          "gap_model": -15.51,
+          "bias_algo": -11.21,
+          "is_fair_tost": false,
+          "n": 56
+        }
+      }
+    },
+    "TabICL (t=0.50)": {
+      "threshold": 0.5,
+      "exposure_rate_cauc": 0.3156,
+      "global_fairness": false,
+      "groups": {
+        "black": {
+          "gap_data": -2.24,
+          "gap_model": -0.75,
+          "bias_algo": 1.49,
+          "is_fair_tost": true,
+          "n": 130
+        },
+        "latino": {
+          "gap_data": -6.46,
+          "gap_model": -14.37,
+          "bias_algo": -7.91,
+          "is_fair_tost": false,
+          "n": 135
+        },
+        "asian": {
+          "gap_data": 8.62,
+          "gap_model": 10.33,
+          "bias_algo": 1.71,
+          "is_fair_tost": false,
+          "n": 391
+        },
+        "other": {
+          "gap_data": -4.3,
+          "gap_model": 4.77,
+          "bias_algo": 9.08,
+          "is_fair_tost": false,
+          "n": 56
+        }
+      }
+    },
+    "TabICL (t*=0.34)": {
+      "threshold": 0.34,
+      "exposure_rate_cauc": 0.6691,
+      "global_fairness": false,
+      "groups": {
+        "black": {
+          "gap_data": -2.24,
+          "gap_model": -10.02,
+          "bias_algo": -7.78,
+          "is_fair_tost": false,
+          "n": 130
+        },
+        "latino": {
+          "gap_data": -6.46,
+          "gap_model": -24.94,
+          "bias_algo": -18.49,
+          "is_fair_tost": false,
+          "n": 135
+        },
+        "asian": {
+          "gap_data": 8.62,
+          "gap_model": 11.66,
+          "bias_algo": 3.04,
+          "is_fair_tost": false,
+          "n": 391
+        },
+        "other": {
+          "gap_data": -4.3,
+          "gap_model": 7.98,
+          "bias_algo": 12.28,
+          "is_fair_tost": false,
+          "n": 56
+        }
+      }
+    }
+  }
+}
