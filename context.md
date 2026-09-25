@@ -37,18 +37,25 @@ Il faut discuter les arbitrages entre ces dimensions et recommander un modèle a
 - *Oli* (absent le premier jour) : app Streamlit déployée avec un lien public (choisir deux profils, obtenir la probabilité avec les trois modèles, l'explication SHAP, un onglet fairness et un onglet stabilité) et template du deck.
 
 *Le contrat de fichiers, pour travailler en parallèle :*
-- data/clean.parquet, data/features.json (cible, variables, attributs protégés, variables limites, règle d'exclusion), data/split.json ;
-- models/logit.joblib, xgb.joblib, tabpfn.joblib, tous avec predict_proba ;
-- src/metrics.py.
-- Un notebook par bloc : 01_data_models (Alex), 02_interpretability (Max), 03_fairness (Blanquette), 04_stability (Remi), plus un dossier app/ (Oli).
-- Les noms ne changent plus. La liste des variables est figée samedi matin au plus tard.
+- `data/clean.parquet`, `data/features.json` (cible, `features` 158 variables, `features_logit` 156 variables, attributs protégés, variables limites, règle d'exclusion), `data/split.json`
+- `models/logit.joblib`, `models/xgb.joblib` — modèles de base (ne plus utiliser pour les analyses finales)
+- **`models/xgb_mitigated.joblib`** ⚠️ — **XGBoost sans proxies raciaux : à utiliser pour toutes les analyses (SHAP, P&L, soutenance)**
+- **`models/logit_mitigated.joblib`** — Logit sans proxies raciaux
+- **`data/tabicl_predictions.parquet`** ⚠️ — prédictions TabICL pré-calculées (iid, pid, wave, tabicl_proba). `models/tabicl.joblib` est CUDA-only, ne pas charger en local.
+- `src/metrics.py` (TOST, métriques partagées), `src/mitigation.py` (FPDP proxy removal), `src/fairness_bias_decomposition.py`
+- Un notebook par bloc : `01_data_models` (Alex), `02_interpretability` (Max), `03_fairness` (Blanquette), `04_stability` (Remi), plus `app/` (Oli).
+- `data/features.json` figé. Les modèles mitigés sont la référence pour la soutenance.
 
-*L'état actuel.* J'ai un script v0, 01_data_models_v0.py, *non testé*. Il charge le CSV (encodage ISO-8859-1), construit un profil par participant, renormalise les préférences, fusionne les profils de A et B sur iid`/pid`, crée les variables de couple et les attributs protégés, encode field_cd, career_c et goal en variables indicatrices, découpe par session (25 % en test), sauvegarde le contrat de fichiers et entraîne un logit (imputation, standardisation, régression logistique), XGBoost et TabPFN, avec gestion d'erreur si TabPFN échoue sur CPU.
+*L'état actuel (25 septembre 2026).* `01_data_models_v0.py` tourne de bout en bout. Les trois modèles sont entraînés et comparés (AUC GroupKFold 5 folds : logit 0.603±0.024, XGBoost 0.599±0.024, TabICL 0.591±0.038 — plafond du problème, convergence attendue). **Fairness livrée** (branche `fairness`, commit `d3076ae`, pushé) : TOST δ=10pp, mitigation FPDP (4 proxies raciaux retirés), décomposition biais sociétal vs algorithmique pour les 3 modèles. Argument central : les échecs TOST (Asiatiques, Latinos) reflètent le biais des participants humains (−8.6pp / −6.5pp dans les données brutes), pas un biais algorithmique ajouté par nos modèles. **XGBoost mitigé est le modèle recommandé.**
 
-*Les prochaines étapes pour moi :* faire tourner et déboguer la v0, la pousser et prévenir le groupe, puis valider le tri des variables avec le dictionnaire, remplacer le logit par PLTR ou AdaLogit (package trust-free), régler XGBoost par validation croisée groupée par session, et faire tourner TabPFN sur GPU (Colab) ou via tabpfn-client si besoin.
+*Instructions par membre pour finir :*
+- **Max** : relancer SHAP/interprétabilité sur `xgb_mitigated.joblib` et `logit_mitigated.joblib` (schéma logit = `features_logit`, 156 features).
+- **Remi** : relancer stabilité avec `features_logit` pour le logit + idéalement sur les modèles mitigés.
+- **Oli** : brancher `xgb_mitigated.joblib` dans l'app ; pour TabICL, lire `data/tabicl_predictions.parquet` (pas de `joblib.load`).
+- **Blanquette** : P&L complet pour les 3 modèles (X=2€/Y=0.5€, seuil GroupKFold, sensibilité).
 
-*Le planning :* jeudi et vendredi, analyses par bloc ; samedi, intégration et branchement des vrais modèles dans l'app ; dimanche, slides, deux répétitions chronométrées et formation croisée pour le Q&A ; lundi 9h40, envoi.
+*Le planning :* samedi, intégration et branchement dans l'app ; dimanche, slides, deux répétitions chronométrées et formation croisée Q&A ; lundi 9h40, envoi.
 
 ---
 
-Pense à joindre aussi le fichier 01_data_models_v0.py à la nouvelle conversation, pour qu'elle ait le code sous les yeux.
+Pense à joindre aussi le fichier `01_data_models_v0.py` et `docs/soutenance_notes.md` à la nouvelle conversation, pour qu'elle ait le code et les analyses sous les yeux.

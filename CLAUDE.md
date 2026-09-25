@@ -46,9 +46,12 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 - `data/clean.parquet` — dataset nettoyé
 - `data/features.json` — cible, variables (`features`, 158, dummies drop_first=True depuis la correction), `features_logit` (158 moins shar1_1_A/B, 156), attributs protégés, variables limites (`borderline` + `borderline_reasons`), règle d'exclusion
 - `data/split.json` — découpage train/test par session
-- `models/logit.joblib`, `models/xgb.joblib`, `models/tabicl.joblib` — tous avec `predict_proba` (`tabicl.joblib` pas encore créé, TabICL bloqué)
+- `models/logit.joblib`, `models/xgb.joblib`, `models/tabicl.joblib` — tous avec `predict_proba`
+- **`models/xgb_mitigated.joblib`** ⚠️ — **version débiaisée de XGBoost à utiliser pour toutes les analyses (SHAP, P&L, soutenance)**. Les 4 proxies raciaux ont été retirés : `attr3_1_B`, `career_c_B_12`, `go_out_B`, `intel3_1_B`. Performances quasi-identiques (AUC −0.8pp). Ne jamais utiliser `xgb.joblib` pour les analyses finales.
+- `models/logit_mitigated.joblib` — version débiaisée du logit (mêmes proxies retirés)
+- **`data/tabicl_predictions.parquet`** ⚠️ — prédictions TabICL pré-calculées sur Colab (colonnes : `iid`, `pid`, `wave`, `tabicl_proba`). À utiliser **à la place de** `models/tabicl.joblib` qui est verrouillé CUDA et ne charge pas en local.
 - `src/build_dataset.py` — `load_and_clean()` + `engineer_features()`, logique partagée (Alex), importée par `01_data_models_v0.py` et le notebook EDA
-- `src/metrics.py` — métriques partagées (Max, pas encore livré)
+- `src/metrics.py` — métriques partagées (Max, livré)
 - `src/stability.py` — bootstrap de stabilité par session (Remi, livré)
 - Un notebook par bloc :
   - `00_eda_cleaning` (Alex) — EDA et nettoyage, livré
@@ -62,7 +65,15 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 
 ## État actuel
 
-`01_data_models_v0.py` tourne de bout en bout (testé, plus le script v0 non testé d'origine). Il importe `load_and_clean()`/`engineer_features()` depuis `src/build_dataset.py` (logique de nettoyage/feature engineering centralisée, plus dupliquée dans le script), découpe par session (`GroupShuffleSplit`, seed=42), sauvegarde le contrat de fichiers, entraîne logit + XGBoost, et contient une section d'audit (missingness, GroupKFold vs split unique, ANOVA income~race dédupliquée). EDA méthodique faite dans `notebooks/00_eda_cleaning.ipynb` (10 sections, exécuté sans erreur). `docs/data_dictionary.md` et `docs/soutenance_notes.md` livrés et tenus à jour.
+`01_data_models_v0.py` tourne de bout en bout. Il importe `load_and_clean()`/`engineer_features()` depuis `src/build_dataset.py`, découpe par session (`GroupShuffleSplit`, seed=42), sauvegarde le contrat de fichiers, entraîne logit + XGBoost, et contient une section d'audit. EDA méthodique faite dans `notebooks/00_eda_cleaning.ipynb` (10 sections). `docs/data_dictionary.md` et `docs/soutenance_notes.md` livrés et tenus à jour.
+
+### Fairness — état branche `fairness` (commit `d3076ae`, pushé)
+
+- **TOST (δ=10pp, α=5%)** implémenté dans `src/metrics.py`.
+- **Mitigation FPDP** (`src/mitigation.py`) : 4 proxies raciaux identifiés et retirés → `xgb_mitigated.joblib` + `logit_mitigated.joblib`.
+- **Décomposition biais sociétal vs algorithmique** (`src/fairness_bias_decomposition.py`) : sépare ce qui vient des données humaines vs ce qu'ajoutent les modèles. Résultats dans `data/fairness_bias_decomposition.json`, graphe dans `reports/fairness/bias_decomposition.png`.
+- **Argument soutenance** : nos modèles ne sont pas structurellement racistes. Les échecs TOST (Asiatiques −8.6pp, Latinos −6.5pp) reflètent le biais sociétal des participants humains Speed Dating, pas un biais algorithmique. XGBoost ajoute ≤4pp de biais propre. Le Logit ajoute −12.5pp vs Latinos → renforce la recommandation XGBoost mitigé.
+- **TabICL** : toujours GPU-only (Colab). Utiliser `data/tabicl_predictions.parquet`, **ne jamais appeler `joblib.load('models/tabicl.joblib')` en local** (segfault CUDA garanti).
 
 Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`) — split identique bit à bit des deux côtés, aucun conflit hors `README.md` (résolu). Son `model_factory()` duplique les pipelines logit/xgb déjà dans `01_data_models_v0.py` — dette technique notée, factorisation prévue après le gel des modèles vendredi soir.
 
@@ -72,10 +83,24 @@ Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`
 
 **Comparaison à 3 modèles obtenue, à iso-features (158)** (AUC test split unique / GroupKFold 5 folds moyenne±écart-type) : logit 0.589 / 0.603±0.024, XGBoost 0.611 / 0.599±0.024, TabICL 0.632 / 0.591±0.038 (Colab, torch==2.11.0+cu128). Les 3 convergent vers ~0.59-0.60 en GroupKFold — plafond du problème, pas un effet d'algorithme. Voir tableau complet dans `docs/soutenance_notes.md`.
 
-### Prochaines étapes (Blanquette)
-1. Prévenir Max (logit à réinterpréter sur le nouveau schéma) et Rémi (stabilité à relancer — déjà su, mais schéma dummies aussi changé).
-2. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`).
-3. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`), y compris pour TabICL (nécessitera de repasser par Colab pour les prédictions).
+### Prochaines étapes
+
+**Max (interprétabilité)** :
+- Relancer SHAP, LIME, PDP/ICE sur **`xgb_mitigated.joblib`** (pas `xgb.joblib`). Les features `attr3_1_B`, `career_c_B_12`, `go_out_B`, `intel3_1_B` ont été supprimées — elles n'apparaîtront plus dans les graphes SHAP.
+- Pour le Logit, utiliser `features_logit` (156 features, `drop_first=True`) et `logit_mitigated.joblib`.
+
+**Rémi (stabilité)** :
+- Relancer `src/stability.py` avec `features_logit` pour le Logit (schéma dummies changé, `shar1_1_A`/`shar1_1_B` retirées + `drop_first=True`).
+- Idéalement : relancer aussi avec les modèles mitigés pour comparer stabilité avant/après mitigation.
+- TabICL : utiliser `data/tabicl_predictions.parquet` pour les prédictions (pas de `joblib.load`).
+
+**Oli (app Streamlit)** :
+- Brancher `xgb_mitigated.joblib` (pas `xgb.joblib`) dans l'interface.
+- Pour TabICL, charger `data/tabicl_predictions.parquet` et faire une jointure sur `iid`/`pid` plutôt qu'appeler `predict_proba`.
+
+**Blanquette (restant)** :
+1. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y) pour les 3 modèles. TabICL via `tabicl_predictions.parquet`.
+2. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé.
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.

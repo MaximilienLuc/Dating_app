@@ -1,0 +1,239 @@
+{
+  "dropped_proxies": [
+    "attr3_1_B",
+    "career_c_B_12",
+    "go_out_B",
+    "intel3_1_B"
+  ],
+  "n_dropped": 4,
+  "features": [
+    "age_A",
+    "date_A",
+    "go_out_A",
+    "imprace_A",
+    "imprelig_A",
+    "exphappy_A",
+    "income_A",
+    "sports_A",
+    "tvsports_A",
+    "exercise_A",
+    "dining_A",
+    "museums_A",
+    "art_A",
+    "hiking_A",
+    "gaming_A",
+    "clubbing_A",
+    "reading_A",
+    "tv_A",
+    "theater_A",
+    "movies_A",
+    "concerts_A",
+    "music_A",
+    "shopping_A",
+    "yoga_A",
+    "attr1_1_A",
+    "sinc1_1_A",
+    "intel1_1_A",
+    "fun1_1_A",
+    "amb1_1_A",
+    "shar1_1_A",
+    "attr3_1_A",
+    "sinc3_1_A",
+    "intel3_1_A",
+    "fun3_1_A",
+    "amb3_1_A",
+    "age_B",
+    "date_B",
+    "imprace_B",
+    "imprelig_B",
+    "exphappy_B",
+    "income_B",
+    "sports_B",
+    "tvsports_B",
+    "exercise_B",
+    "dining_B",
+    "museums_B",
+    "art_B",
+    "hiking_B",
+    "gaming_B",
+    "clubbing_B",
+    "reading_B",
+    "tv_B",
+    "theater_B",
+    "movies_B",
+    "concerts_B",
+    "music_B",
+    "shopping_B",
+    "yoga_B",
+    "attr1_1_B",
+    "sinc1_1_B",
+    "intel1_1_B",
+    "fun1_1_B",
+    "amb1_1_B",
+    "shar1_1_B",
+    "sinc3_1_B",
+    "fun3_1_B",
+    "amb3_1_B",
+    "int_corr",
+    "age_diff",
+    "abs_age_diff",
+    "fit_score",
+    "field_cd_A_1",
+    "field_cd_A_10",
+    "field_cd_A_11",
+    "field_cd_A_12",
+    "field_cd_A_13",
+    "field_cd_A_14",
+    "field_cd_A_15",
+    "field_cd_A_16",
+    "field_cd_A_17",
+    "field_cd_A_18",
+    "field_cd_A_2",
+    "field_cd_A_3",
+    "field_cd_A_4",
+    "field_cd_A_5",
+    "field_cd_A_6",
+    "field_cd_A_7",
+    "field_cd_A_8",
+    "field_cd_A_9",
+    "field_cd_A_NA",
+    "field_cd_B_1",
+    "field_cd_B_10",
+    "field_cd_B_11",
+    "field_cd_B_12",
+    "field_cd_B_13",
+    "field_cd_B_14",
+    "field_cd_B_15",
+    "field_cd_B_16",
+    "field_cd_B_17",
+    "field_cd_B_18",
+    "field_cd_B_2",
+    "field_cd_B_3",
+    "field_cd_B_4",
+    "field_cd_B_5",
+    "field_cd_B_6",
+    "field_cd_B_7",
+    "field_cd_B_8",
+    "field_cd_B_9",
+    "field_cd_B_NA",
+    "career_c_A_1",
+    "career_c_A_10",
+    "career_c_A_11",
+    "career_c_A_12",
+    "career_c_A_13",
+    "career_c_A_14",
+    "career_c_A_15",
+    "career_c_A_16",
+    "career_c_A_17",
+    "career_c_A_2",
+    "career_c_A_3",
+    "career_c_A_4",
+    "career_c_A_5",
+    "career_c_A_6",
+    "career_c_A_7",
+    "career_c_A_8",
+    "career_c_A_9",
+    "career_c_A_NA",
+    "career_c_B_1",
+    "career_c_B_10",
+    "career_c_B_11",
+    "career_c_B_13",
+    "career_c_B_14",
+    "career_c_B_15",
+    "career_c_B_16",
+    "career_c_B_17",
+    "career_c_B_2",
+    "career_c_B_3",
+    "career_c_B_4",
+    "career_c_B_5",
+    "career_c_B_6",
+    "career_c_B_7",
+    "career_c_B_8",
+    "career_c_B_9",
+    "career_c_B_NA",
+    "goal_A_1",
+    "goal_A_2",
+    "goal_A_3",
+    "goal_A_4",
+    "goal_A_5",
+    "goal_A_6",
+    "goal_A_NA",
+    "goal_B_1",
+    "goal_B_2",
+    "goal_B_3",
+    "goal_B_4",
+    "goal_B_5",
+    "goal_B_6",
+    "goal_B_NA",
+    "income_missing_A",
+    "income_missing_B"
+  ],
+  "n_features": 160,
+  "fpdp_diagnostics": {
+    "go_out_B": {
+      "all_fair_achieved": false,
+      "flips": [
+        {
+          "type": "partial_resolution",
+          "val": 4.0,
+          "resolved_groups": [
+            "caucasian_vs_other"
+          ]
+        },
+        {
+          "type": "partial_resolution",
+          "val": 5.0,
+          "resolved_groups": [
+            "caucasian_vs_other"
+          ]
+        },
+        {
+          "type": "partial_resolution",
+          "val": 6.0,
+          "resolved_groups": [
+            "caucasian_vs_other"
+          ]
+        }
+      ]
+    },
+    "attr3_1_B": {
+      "all_fair_achieved": true,
+      "flips": [
+        {
+          "type": "global_race_fair",
+          "val": 2.0,
+          "gaps": {
+            "caucasian_vs_black": 0.036460291857945915,
+            "caucasian_vs_latino": -0.01572665814531332,
+            "caucasian_vs_asian": 0.07942141998953231,
+            "caucasian_vs_other": 0.0274873589695514
+          }
+        }
+      ]
+    },
+    "intel3_1_B": {
+      "all_fair_achieved": false,
+      "flips": [
+        {
+          "type": "partial_resolution",
+          "val": 10.0,
+          "resolved_groups": [
+            "caucasian_vs_other"
+          ]
+        }
+      ]
+    },
+    "career_c_B_12": {
+      "all_fair_achieved": false,
+      "flips": [
+        {
+          "type": "partial_resolution",
+          "val": 1.0,
+          "resolved_groups": [
+            "caucasian_vs_other"
+          ]
+        }
+      ]
+    }
+  }
+}
