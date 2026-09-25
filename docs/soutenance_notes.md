@@ -173,6 +173,39 @@ colonnes redondantes.
   nous, voir "TabICL — diagnostic du crash CPU et décision") : son bootstrap par session ne
   peut pas tourner en local sur TabICL
 
+## Audit de Fairness : test d'équivalence TOST (Schuirmann, 1987) sur les origines
+- **Principe d'IA de confiance** : le test de deux t-tests unilatéraux (TOST) renverse la charge
+  de la preuve. Contrairement à un t-test classique qui postule l'équité par défaut ($p_1 = p_2$),
+  l'approche par équivalence pose le modèle **non équivalent / biaisé par défaut** et exige de prouver
+  statistiquement que l'écart d'exposition reste confiné dans une marge de tolérance $\delta = 10\text{ pp}$
+  ($\alpha = 0.05$, soit un intervalle de confiance conjoint à $90\%$).
+- **Protocole d'audit pairwise** : groupe de référence = Caucasiens ($n=1\,109$ sur le set de test),
+  comparé individuellement à chaque minorité présente : Asiatiques ($n=391$), Latinos ($n=135$),
+  Noirs ($n=130$), Autres ($n=56$).
+- **Résultats au seuil de tolérance $\delta = 10\text{ pp}$** (seuil de décision = 0.5) :
+  - **Logit** (taux moyen Caucasiens = 36.8%) :
+    - vs Asiatiques : écart = **+10.2 pp** (IC 90% : [+5.8, +14.6]) — **Échec** (sous-exposition nette des Asiatiques)
+    - vs Latinos : écart = **−18.8 pp** (IC 90% : [−26.2, −11.3]) — **Échec** (surexposition des candidats Latinos)
+    - vs Noirs : écart = **−3.2 pp** (IC 90% : [−10.7, +4.3]) — **Échec** (l'écart estimé est faible mais l'IC déborde des 10 pp par manque de puissance statistique, $n=130$)
+    - vs Autres : écart = **−4.3 pp** (IC 90% : [−15.4, +6.8]) — **Échec** ($n=56$, variance trop forte)
+    - *Équivalence globale raciale : Rejetée (0 / 4 tests validés).*
+  - **XGBoost** (taux moyen Caucasiens = 36.7%) :
+    - vs Noirs : écart = **+2.1 pp** (IC 90% : [−5.2, +9.4]) — **Validé (Fair)** (IC strictement inclus dans [−10 pp, +10 pp])
+    - vs Asiatiques : écart = **+11.1 pp** (IC 90% : [+6.8, +15.5]) — **Échec** (sous-exposition nette des Asiatiques)
+    - vs Latinos : écart = **−10.7 pp** (IC 90% : [−18.2, −3.2]) — **Échec** (surexposition des Latinos)
+    - vs Autres : écart = **+9.9 pp** (IC 90% : [−0.1, +19.9]) — **Échec**
+    - *Équivalence globale raciale : Rejetée (1 / 4 tests validés).*
+- **Points clés pour la soutenance (récit Blanquette / Max)** :
+  1. *Démonstration concrète du renversement de la charge de la preuve* : pour Logit vs Noirs (−3.2 pp) et
+     Logit vs Autres (−4.3 pp), l'écart brut observé est inférieur à 10 pp, mais le test TOST échoue quand même.
+     Ce résultat illustre parfaitement aux jurys qu'un faible écart apparent ne suffit pas : sans effectif suffisant
+     pour resserrer l'intervalle de confiance à 90%, on ne peut garantir l'absence de biais.
+  2. *Reproduction des biais sociologiques historiques sans variable protégée* : bien que la variable d'origine
+     ne soit jamais entrée dans les modèles, les deux modèles sous-exposent systématiquement les candidats asiatiques
+     d'environ 10 à 11 pp par rapport aux caucasiens, captant des proxys d'intérêts ou de préférences déclarées.
+  3. *Graphiques du rapport générés* : `reports/fairness/tost_intervals.png` (intervalles de confiance TOST vs zone
+     d'équivalence [−10 pp, +10 pp]) et `reports/fairness/racial_exposure_rates.png` (taux d'exposition réels vs prédits).
+
 ## À faire (pas encore réalisé, à ne pas oublier)
 - [ ] Construire la matrice de coûts P&L et implémenter le calcul du profit total pour un seuil
       donné, à partir des prédictions des 3 modèles

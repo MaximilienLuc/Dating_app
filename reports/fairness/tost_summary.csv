@@ -1,0 +1,9 @@
+model,comparison,group,n_cauc,n_min,p_cauc_pct,p_min_pct,gap_pp,sigma_pp,ci_lower_pp,ci_upper_pp,is_fair
+Logit,Caucasian vs Black,Black,1109,130,36.79,40.0,-3.21,4.53,-10.67,4.25,False
+Logit,Caucasian vs Latino,Latino,1109,135,36.79,55.56,-18.77,4.52,-26.2,-11.33,False
+Logit,Caucasian vs Asian,Asian,1109,391,36.79,26.6,10.19,2.66,5.81,14.57,False
+Logit,Caucasian vs Other,Other,1109,56,36.79,41.07,-4.28,6.73,-15.36,6.8,False
+XGBoost,Caucasian vs Black,Black,1109,130,36.7,34.62,2.08,4.42,-5.19,9.35,True
+XGBoost,Caucasian vs Latino,Latino,1109,135,36.7,47.41,-10.71,4.53,-18.17,-3.24,False
+XGBoost,Caucasian vs Asian,Asian,1109,391,36.7,25.58,11.12,2.64,6.78,15.47,False
+XGBoost,Caucasian vs Other,Other,1109,56,36.7,26.79,9.91,6.09,-0.11,19.94,False
