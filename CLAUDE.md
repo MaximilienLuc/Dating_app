@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairness*, Pr. Christophe Pérignon et Dr Sébastien Saurin, MSc DSAIB, septembre 2026).
 
-**Client fictif : « HEC Match »**, une app de rencontre qui décide quels profils montrer à chaque utilisateur. Objectif : analyse de scoring (cible binaire) comparant trois modèles — un white box (logit, idéalement PLTR ou AdaLogit), XGBoost, et TabPFN (Tabular Foundation Model) — sur quatre dimensions : **performance** (statistique et économique), **interprétabilité** (globale et locale), **stabilité**, **fairness**. Il faut arbitrer entre ces dimensions et recommander un modèle selon une logique d'IA de confiance, pas seulement la meilleure AUC.
+**Client fictif : « HEC Match »**, une app de rencontre qui décide quels profils montrer à chaque utilisateur. Objectif : analyse de scoring (cible binaire) comparant trois modèles — un white box (logit), XGBoost, et TabICL (Tabular Foundation Model — remplace TabPFN, initialement prévu) — sur quatre dimensions : **performance** (statistique et économique), **interprétabilité** (globale et locale), **stabilité**, **fairness**. Il faut arbitrer entre ces dimensions et recommander un modèle selon une logique d'IA de confiance, pas seulement la meilleure AUC.
 
 **Dataset** : Speed Dating Experiment (Fisman et Iyengar, Columbia, 2002–2004) — 8 378 lignes, 195 variables brutes, 21 sessions, rendez-vous de 4 minutes. Chaque ligne = un participant sur un rendez-vous (chaque rencontre apparaît deux fois).
 
@@ -27,15 +27,16 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 5. **P&L économique** : oui = +X €, non = −Y €, match manqué = revenu perdu. Seuil optimisé sur le P&L + analyse de sensibilité à X et Y.
 6. **Stabilité** : train/test croisé entre sessions + bootstrap. Mesurer distances entre coefficients / importances, et % de décisions qui basculent.
 7. **Limites à annoncer** : données anciennes, étudiants Columbia uniquement, beaucoup de valeurs manquantes (87 % des lignes, 1,8 % des cellules), origine utilisée seulement pour l'audit.
+8. **Colinéarité des 6 préférences pour le logit** : `attr1_1+sinc1_1+intel1_1+fun1_1+amb1_1+shar1_1` somme à 100 par construction (confirmé structurel sur toutes les waves, pas un artefact — voir point 3), donc parfaitement colinéaires. **Implémenté** : `shar1_1_A`/`shar1_1_B` retirées des features du **logit uniquement** (`feature_dict["features_logit"]`, XGBoost/TabICL gardent les 6) — analogue à `drop_first=True`. Alternative plus rigoureuse (transform log-ratio sur données compositionnelles) écartée pour le calendrier. VIF de contrôle fait sur les 156 features finales du logit : 2 paires de colonnes à VIF infini documentées comme limite connue (petits effectifs sur des catégories rares), pas corrigées faute de temps — voir `docs/soutenance_notes.md`.
 
 ## Équipe
 
 | Membre | Rôle |
 |---|---|
-| Alex (moi) | Données, variables, découpage, les 3 modèles, performance et P&L |
-| Max | Interprétabilité (coefficients, SHAP, LIME, PDP/ICE, permutation importance, XPER) ; `src/metrics.py` ; mail de pré-validation |
-| Blanquette | Fairness (tests, FPDP, mitigation, TOST) et récit de la soutenance |
-| Remi | Stabilité (absent le premier jour) |
+| Blanquette (moi) | **Rôles échangés avec Alex** : données, EDA, les 3 modèles, performance et P&L (voir tout ce document — c'est le travail fait jusqu'ici) |
+| Alex | Rôle échangé avec Blanquette — à confirmer ce qu'il reprend (pas fairness, c'est Max qui l'a pris) |
+| Max | Interprétabilité (coefficients, SHAP, LIME, PDP/ICE, permutation importance, XPER) ; mail de pré-validation. **A aussi démarré la fairness** (branche `fairness` : TOST, audit racial, `src/metrics.py`, `src/generate_fairness_reports.py`) — rôle réellement couvert plus large que prévu initialement |
+| Remi | Stabilité — **livré et mergé** : bootstrap par session sur logit/xgb (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`). À relancer une fois `features_logit` disponible (retrait shar1_1) ; TabICL à ajouter une fois qu'il aura accès à Colab/CUDA lui aussi |
 | Oli | App Streamlit (deux profils → proba des 3 modèles + SHAP + onglet fairness + onglet stabilité) et template du deck (absent le premier jour) |
 
 ## Contrat de fichiers (pour travailler en parallèle)
@@ -43,27 +44,38 @@ Projet de groupe HEC (cours *Interpretability, Stability, and Algorithmic Fairne
 **Ces noms et interfaces sont figés — ne pas les renommer ni changer leur forme sans en avertir toute l'équipe.** La liste des variables est figée samedi matin au plus tard.
 
 - `data/clean.parquet` — dataset nettoyé
-- `data/features.json` — cible, variables, attributs protégés, variables limites, règle d'exclusion
+- `data/features.json` — cible, variables (`features`, 158, dummies drop_first=True depuis la correction), `features_logit` (158 moins shar1_1_A/B, 156), attributs protégés, variables limites (`borderline` + `borderline_reasons`), règle d'exclusion
 - `data/split.json` — découpage train/test par session
-- `models/logit.joblib`, `models/xgb.joblib`, `models/tabpfn.joblib` — tous avec `predict_proba`
-- `src/metrics.py` — métriques partagées (Max)
+- `models/logit.joblib`, `models/xgb.joblib`, `models/tabicl.joblib` — tous avec `predict_proba` (`tabicl.joblib` pas encore créé, TabICL bloqué)
+- `src/build_dataset.py` — `load_and_clean()` + `engineer_features()`, logique partagée (Alex), importée par `01_data_models_v0.py` et le notebook EDA
+- `src/metrics.py` — métriques partagées (Max, pas encore livré)
+- `src/stability.py` — bootstrap de stabilité par session (Remi, livré)
 - Un notebook par bloc :
+  - `00_eda_cleaning` (Alex) — EDA et nettoyage, livré
   - `01_data_models` (Alex)
   - `02_interpretability` (Max)
   - `03_fairness` (Blanquette)
-  - `04_stability` (Remi)
+  - `04_stability` (Remi, livré : `04_stability.ipynb` + `.executed.ipynb`)
+- `docs/data_dictionary.md`, `docs/soutenance_notes.md` — livrés (Alex)
+- `reports/stability/` — sorties du bootstrap de Remi (CSV, PNG, `summary.json`)
 - `app/` — application Streamlit (Oli)
 
 ## État actuel
 
-`01_data_models_v0.py` est un script v0 **non testé**. Il charge le CSV (encodage ISO-8859-1), construit un profil par participant, renormalise les préférences (sessions 6–9), fusionne les profils de A et B sur `iid`/`pid`, crée les variables de couple et les attributs protégés, encode `field_cd`, `career_c`, `goal` en indicatrices, découpe par session (25 % test), sauvegarde le contrat de fichiers ci-dessus, puis entraîne un logit (imputation + standardisation + régression logistique), XGBoost et TabPFN (avec gestion d'erreur si TabPFN échoue sur CPU).
+`01_data_models_v0.py` tourne de bout en bout (testé, plus le script v0 non testé d'origine). Il importe `load_and_clean()`/`engineer_features()` depuis `src/build_dataset.py` (logique de nettoyage/feature engineering centralisée, plus dupliquée dans le script), découpe par session (`GroupShuffleSplit`, seed=42), sauvegarde le contrat de fichiers, entraîne logit + XGBoost, et contient une section d'audit (missingness, GroupKFold vs split unique, ANOVA income~race dédupliquée). EDA méthodique faite dans `notebooks/00_eda_cleaning.ipynb` (10 sections, exécuté sans erreur). `docs/data_dictionary.md` et `docs/soutenance_notes.md` livrés et tenus à jour.
 
-### Prochaines étapes (Alex)
-1. Faire tourner et déboguer la v0, la pousser et prévenir le groupe.
-2. Valider le tri des variables avec le dictionnaire (`Speed Dating Data Key.doc`).
-3. Remplacer le logit par PLTR ou AdaLogit (package trust-free).
-4. Régler XGBoost par validation croisée groupée par session.
-5. Faire tourner TabPFN sur GPU (Colab) ou via `tabpfn-client` si besoin.
+Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`, `04_stability.ipynb`, `reports/stability/`) — split identique bit à bit des deux côtés, aucun conflit hors `README.md` (résolu). Son `model_factory()` duplique les pipelines logit/xgb déjà dans `01_data_models_v0.py` — dette technique notée, factorisation prévue après le gel des modèles vendredi soir.
+
+**Fait depuis la dernière mise à jour** : retrait de `shar1_1` pour le logit (`features_logit`), correction de l'encodage des dummies (`drop_first=True`, vocabulaire fixe `CAT_CODES`), VIF de contrôle calculé, TabICL réentraîné sur Colab avec le `features.json` à jour (158 features, comparaison désormais à iso-features) — voir point 8 et `docs/soutenance_notes.md` pour le détail. **Reste à faire** : prévenir Max (interprétabilité du logit à refaire sur le nouveau schéma) et Rémi (stabilité à relancer — déjà noté).
+
+**TabICL débloqué, mais pas portable.** `TabICLClassifier.fit()` (tabicl==2.2.0) segfault de façon reproductible sur le chemin CPU — confirmé sur Mac Apple Silicon (M4) **et** sur Colab en CPU (x86_64) : pas un bug spécifique à Apple Silicon, le chemin CPU de la lib est cassé plus largement. Seul `device="cuda"` sur Colab fonctionne. Le `models/tabicl.joblib` qui en résulte est verrouillé sur l'état CUDA (`torch==2.11.0+cu128`) : ne se charge pas sur une machine sans CUDA (plante dès `joblib.load()`, avant `predict_proba()`) — pas portable, mais accepté (usage ponctuel via Colab, pas de réentraînement fréquent). Script versionné dans `colab/train_tabicl.py`. En-tête standardisé dans `src/tabicl_model.py`. Détail complet du diagnostic dans `docs/soutenance_notes.md`.
+
+**Comparaison à 3 modèles obtenue, à iso-features (158)** (AUC test split unique / GroupKFold 5 folds moyenne±écart-type) : logit 0.589 / 0.603±0.024, XGBoost 0.611 / 0.599±0.024, TabICL 0.632 / 0.591±0.038 (Colab, torch==2.11.0+cu128). Les 3 convergent vers ~0.59-0.60 en GroupKFold — plafond du problème, pas un effet d'algorithme. Voir tableau complet dans `docs/soutenance_notes.md`.
+
+### Prochaines étapes (Blanquette)
+1. Prévenir Max (logit à réinterpréter sur le nouveau schéma) et Rémi (stabilité à relancer — déjà su, mais schéma dummies aussi changé).
+2. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`).
+3. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`), y compris pour TabICL (nécessitera de repasser par Colab pour les prédictions).
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.
