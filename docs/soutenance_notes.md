@@ -242,3 +242,54 @@ colonnes redondantes.
   alchimie à partir d'un profil pré-rencontre), pas un choix d'algorithme sous-optimal
 - XGBoost retenu comme modèle ML officiel : gère nativement les NaN (pertinent vu le taux de
   missing sur income), permet d'exploiter income_missing_A/B plus finement que RF
+
+
+## Stabilité (Rémi) : contrat de variables par modèle
+- Le logit doit utiliser `contract.get("features_logit", contract["features"])` ; XGBoost
+  conserve `features`. Cela s'applique au modèle de référence, à chaque réentraînement,
+  aux prédictions et aux coefficients exportés. Le split par wave et seed=42 restent inchangés.
+- D'après le message de Blanche, retirer `shar1_1_A` et `shar1_1_B` sert à lever la dépendance
+  entre les six parts de préférences. Les coefficients sont donc à réinterpréter avec une
+  catégorie de référence implicite ; ce retrait ne garantit pas à lui seul l'absence de toute
+  autre colinéarité.
+- Les résultats de stabilité déjà publiés sont historiques, antérieurs au nouveau contrat.
+  Ils ne doivent pas servir de chiffres pour le logit corrigé. Relance en attente de la
+  publication de `features_logit` (absent du main vérifié au commit 4cd5bfe).
+- TabICL remplace TabPFN, conformément à la décision transmise par Blanche. Aucun résultat
+  TabICL de stabilité n'est revendiqué avant disponibilité de sa configuration d'entraînement.
+- Les dépendances de stabilité utilisent désormais les versions épinglées du groupe.
+- Le test final reste hors réglage des variables, des hyperparamètres et du seuil. Les
+  réévaluations de stabilité sont descriptives ; le test a déjà été consulté lors de la v0,
+  il ne serait donc pas exact de le présenter comme totalement inédit à la soutenance.
+
+## Stabilité : intégration des prédictions TabICL (Rémi)
+- Source d'intégration : branche `blanche`, commit `5a3b1b3`. `features_logit` est bien
+  disponible sur cette branche ; le constat d'absence sur main ci-dessus était daté.
+- Trois modèles évalués côté test, deux réentraînés côté train. TabICL est joint par
+  `(iid, pid, wave)` avec contrôle d'unicité, de couverture et de probabilités valides.
+  Aucun chargement de son modèle CUDA et aucun réentraînement TabICL ne sont effectués.
+- Bootstrap par sessions avec remplacement, pas GroupKFold. Les tirages test sont les mêmes
+  pour les trois modèles. TabICL : incertitude de performance uniquement, aucune conclusion
+  sur les changements de décisions ou d'importance après réentraînement.
+- Ajout de la distance euclidienne, en complément de la distance cosinus : coefficients
+  logit exprimés dans une unité commune (écart-type du train original), gains normalisés
+  pour XGBoost. Les distances des deux familles ne se comparent pas directement.
+- Le logit existant utilise déjà la pénalité L2 par défaut de scikit-learn (C=1).
+  Une comparaison Elastic Net ou un autre niveau de régularisation serait une expérience
+  supplémentaire à sélectionner en validation interne par wave, pas sur le test final.
+- Aucun arbitrage performance/stabilité de XGBoost n'est démontré par la seule variance
+  des importances. Il faudrait comparer des configurations prédéfinies en validation interne.
+- Le déplacement du seuil optimal P&L est une extension différée : coûts et seuil métier
+  ne sont pas encore fixés. Le taux de bascule actuel utilise le seuil descriptif 0,5.
+
+
+### Résultats de stabilité actualisés
+- Run cloud `36034895577`, code `64b37a5`, données de Blanche `5a3b1b3` :
+  200 réentraînements par modèle (logit/XGBoost), 2 000 bootstraps test appariés (les trois).
+- AUC : logit 0,589 ; XGBoost 0,614 ; TabICL 0,632. Les trois intervalles de différence
+  appariée incluent zéro. Ne pas annoncer de supériorité statistique démontrée.
+- Décisions qui basculent après réentraînement : 16,7% logit, 21,4% XGBoost en moyenne
+  au seuil fixe 0,5. Ce ne sont pas des taux d'erreur. Non mesuré pour TabICL.
+- Ces exports remplacent les anciens résultats gelés ; les remarques d'attente ci-dessus
+  décrivent l'état antérieur de main. L'intégration utilise bien `features_logit` (156 variables)
+  et `features` (158), avec le split original et seed=42.
