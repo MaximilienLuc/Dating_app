@@ -54,7 +54,7 @@ MODELS_DIR = ROOT / "models"
 ECON_ASSUMPTIONS_PATH = DATA_DIR / "economic_assumptions.json"
 
 BASELINE_MODEL_NAMES = ["logit", "xgb", "tabicl"]
-MITIGATED_MODEL_NAMES = ["logit_mitigated", "xgb_mitigated"]  # pas de tabicl_mitigated
+MITIGATED_MODEL_NAMES = ["logit_mitigated", "xgb_mitigated", "tabicl_mitigated"]
 MODEL_NAMES = BASELINE_MODEL_NAMES  # rétro-compatibilité (notebook, appels existants)
 
 # Reconstruction de l'ancien encodage (164 features, avant drop_first=True) pour les modèles
@@ -119,11 +119,15 @@ def load_model_predictions():
 
 
 def load_mitigated_predictions(data):
-    """Ajoute proba_logit_mitigated/proba_xgb_mitigated à `data` (déjà chargé par
-    load_model_predictions). Retourne (data, mitigated_features).
+    """Ajoute proba_logit_mitigated/proba_xgb_mitigated/proba_tabicl_mitigated à `data` (déjà
+    chargé par load_model_predictions). Retourne (data, mitigated_features).
 
-    Pas de version TabICL mitigée (n'existe pas côté Max) -- comparaison base/mitigé limitée
-    à logit et xgb.
+    logit_mitigated/xgb_mitigated : rechargés et appliqués directement (predict_proba), comme
+    les modèles de base -- voir add_legacy_reference_dummies pour la reconstruction du schéma.
+    tabicl_mitigated : prédictions déjà calculées sur Colab
+    (data/tabicl_mitigated_predictions.parquet, colonne tabicl_mit_proba), entraîné par
+    colab/train_tabicl_mitigated.py -- JAMAIS de rechargement/refit du modèle en local, même
+    contrainte CUDA que TabICL de base (cf. load_model_predictions).
     """
     mitigated_features = json.loads((DATA_DIR / "mitigated_features.json").read_text())["features"]
     data_legacy = add_legacy_reference_dummies(data)
@@ -135,6 +139,11 @@ def load_mitigated_predictions(data):
                         # ré-entraîner logit_mitigated/xgb_mitigated par fold, cf. GroupKFold)
     data["proba_logit_mitigated"] = logit_mit.predict_proba(data[mitigated_features])[:, 1]
     data["proba_xgb_mitigated"] = xgb_mit.predict_proba(data[mitigated_features])[:, 1]
+
+    tabicl_mit_preds = pd.read_parquet(DATA_DIR / "tabicl_mitigated_predictions.parquet")
+    data = data.merge(tabicl_mit_preds[["iid", "pid", "wave", "tabicl_mit_proba"]],
+                       on=["iid", "pid", "wave"], how="left")
+    data = data.rename(columns={"tabicl_mit_proba": "proba_tabicl_mitigated"})
     return data, mitigated_features
 
 
@@ -165,6 +174,8 @@ def build_model_specs(feature_dict, mitigated_features=None):
         specs["xgb_mitigated"] = {"proba_col": "proba_xgb_mitigated",
                                    "features": mitigated_features, "refittable": True,
                                    "refit_kind": "xgb"}
+        specs["tabicl_mitigated"] = {"proba_col": "proba_tabicl_mitigated", "features": None,
+                                      "refittable": False, "refit_kind": None}
     return specs
 
 
@@ -510,6 +521,10 @@ def run_full_analysis(output_dir=None, include_mitigated=True, run_xper=True,
                                             "nécessite des centaines d'appels predict_proba, "
                                             "pas seulement des prédictions figées -- tenté sur "
                                             "Colab via colab/xper_tabicl.py, résultat non garanti"}
+        if include_mitigated:
+            xper_results["tabicl_mitigated"] = {"status": "not_computed",
+                                                "reason": "même contrainte que tabicl (modèle "
+                                                          "CUDA-only, non chargeable en local)"}
     results["xper"] = xper_results
 
     # --- Robustesse : scénarios alternatifs de X/Y/Z ---

@@ -116,7 +116,7 @@ colonnes redondantes.
   écartée par souci de calendrier (modèles gelés vendredi soir) ; le retrait simple reste
   défendable pour ce niveau de projet — phrase à avoir prête en Q&A si le sujet vient.
 
-## Performance prédictive (statistique + économique) — FAIT, 3 modèles de base + 2 mitigés
+## Performance prédictive (statistique + économique) — FAIT, 3 modèles de base + 3 mitigés
 
 Implémenté dans `src/performance.py` (branche `blanche-performance`), notebook narratif
 `notebooks/05_performance.ipynb` (à resynchroniser avec cette section — voir "À faire"),
@@ -137,14 +137,22 @@ les occasions manquées, ce qui poussait les seuils optimaux vers des valeurs d�
 pas du vrai match mutuel (`match`) qui nécessiterait de croiser deux décisions d'une paire —
 limite documentée dans `src/performance.py`, pas cachée.
 
-**Modèles mitigés (Max, `src/mitigation.py`)** : `logit_mitigated.joblib` / `xgb_mitigated.joblib`
-retirent 4 proxies raciaux identifiés par FPDP. Entraînés sur l'ancien schéma à 164/160 features
-(avant notre correction `drop_first=True`, cf. "Feature engineering") — les 6 colonnes de
-référence manquantes sont reconstruites **exactement** (encodage one-hot exhaustif, référence =
-1 − somme des autres catégories) par `add_legacy_reference_dummies()` dans `src/performance.py`,
-pas besoin d'attendre un réentraînement côté Max. Pas de version TabICL mitigée pour l'instant —
-script prêt (`colab/train_tabicl_mitigated.py` / `.ipynb`) mais pas encore exécuté (dépend de
-Max ou de nous, sur Colab GPU).
+**Modèles mitigés (Max pour logit/xgb, `src/mitigation.py` ; nous pour TabICL)** :
+`logit_mitigated.joblib` / `xgb_mitigated.joblib` retirent 4 proxies raciaux identifiés par
+FPDP. Entraînés sur l'ancien schéma à 164/160 features (avant notre correction
+`drop_first=True`, cf. "Feature engineering") — les 6 colonnes de référence manquantes sont
+reconstruites **exactement** (encodage one-hot exhaustif, référence = 1 − somme des autres
+catégories) par `add_legacy_reference_dummies()` dans `src/performance.py`, pas besoin
+d'attendre un réentraînement côté Max. **⚠️ Limite connue non corrigée sur `logit_mitigated`
+spécifiquement** : voir mise en garde plus bas.
+
+`tabicl_mitigated` : entraîné sur Colab (GPU T4) via `colab/train_tabicl_mitigated.py`/`.ipynb`
+(script de Max, exécuté par Blanquette), mêmes 4 proxies retirés, schéma correct (158 − 4 = 154
+features, pas de problème d'ancien encodage contrairement au logit/xgb de Max car réentraîné
+directement sur le `features.json` courant). Prédictions dans
+`data/tabicl_mitigated_predictions.parquet` (colonne `tabicl_mit_proba`, jointure sur
+`iid`/`pid`/`wave`) — même traitement que `tabicl` de base, jamais de `joblib.load()` en local
+(modèle verrouillé CUDA).
 
 **Seuil optimisé par grille (0.05-0.95) sur GroupKFold (train, 5 folds sur wave)**, appliqué une
 seule fois sur test :
@@ -156,13 +164,16 @@ seule fois sur test :
 | TabICL | 0.545 | 0.35 | 375 | -97 |
 | Logit mitigé | 0.492 | 0.05 | 527 | -83 |
 | XGBoost mitigé | 0.512 | 0.10 | 531 | -83 |
+| TabICL mitigé | 0.527 | 0.35 | 391 | -76 |
 
-**Fairness vs performance économique — base vs mitigé** : logit gagne +22 en P&L optimal après
-mitigation, xgb perd -5. Écart faible par rapport au bruit d'échantillonnage (single test split,
-~1800 lignes). **Premier constat pour l'argumentaire business : la mitigation ne dégrade pas la
-performance économique de façon visible, et l'améliore même légèrement pour le logit** — mais ce
-sont des points estimés, pas encore de test de significativité (bootstrap apparié par session,
-proposé à Rémi, cf. "Coordination équipe" et section stabilité).
+**Fairness vs performance économique — base vs mitigé, 3 paires** : logit +22 de P&L optimal
+après mitigation (505→527), xgb -5 (536→531), tabicl +16 (375→391). Écarts faibles par rapport
+au bruit d'échantillonnage (single test split, ~1800 lignes) — TabICL perd un peu d'AUC
+(0.545→0.527) mais gagne en P&L, même tendance que le logit. **Sur les 3 paires, aucune ne
+montre de dégradation économique franche de la mitigation — 2 l'améliorent même légèrement.
+Argumentaire business : la fairness ne coûte pas cher ici, potentiellement rien.** Toujours des
+points estimés, pas de test de significativité (bootstrap apparié par session, proposé à Rémi,
+cf. "Coordination équipe" et section stabilité).
 
 **XPER (Sinclair et al.)** : `pip install XPER`, `ModelPerformance(...).calculate_XPER_values(...)`.
 Nécessite le vrai objet modèle (appelé sur des centaines de coalitions de features masquées) —
@@ -454,20 +465,23 @@ l'évaluation s'appuie sur `data/tabicl_predictions.parquet` (inférence GPU Col
 - [ ] Prévenir Max : le logit a maintenant un features_logit distinct de features -- toute
       interprétation (SHAP/coefficients) du logit déjà commencée sur l'ancien schéma sera à
       refaire ; et que `logit_mitigated.joblib` n'a pas retiré shar1_1_A/B (VIF à vérifier)
-- [x] Lancer le P&L sur les 3 modèles de base — fait, étendu aux 2 modèles mitigés de Max, voir
-      "Performance prédictive"
+- [x] Lancer le P&L sur les 3 modèles de base — fait, étendu aux 3 modèles mitigés (Max pour
+      logit/xgb, nous pour TabICL), voir "Performance prédictive"
 - [x] Réaligner les hypothèses économiques (X/Y) sur celles de Max, ajouter un coût aux
       occasions manquées (Z, absent de la 1ère version) — fait, `data/economic_assumptions.json`
 - [x] XPER appliqué directement au P&L (pas seulement à l'AUC) — fait, `compute_xper_pnl()`,
       voir "Performance prédictive" (a nécessité de documenter et corriger un bug de la
       librairie XPER sur CFP/CFN, inversés en interne par rapport à leur docstring)
-- [ ] Exécuter `colab/train_tabicl_mitigated.py`/`.ipynb` sur Colab GPU (prêt, pas encore
-      lancé) pour avoir un 3e modèle mitigé et compléter la comparaison base/mitigé
+- [x] Exécuter `colab/train_tabicl_mitigated.py`/`.ipynb` sur Colab GPU — fait, `tabicl_mitigated`
+      intégré à la comparaison base/mitigé (voir "Performance prédictive"). Incident mineur au
+      passage : `data/tabicl_mitigated_predictions.parquet` écrit par une version de pyarrow plus
+      récente que celle installée en local (`Repetition level histogram size mismatch` à la
+      lecture) — résolu par `pip install -U pyarrow` (19.0.0 → 25.0.1).
 - [ ] Test de significativité formel (bootstrap apparié par session, sur le modèle de
-      `reports/stability/`) sur l'écart de P&L base vs mitigé (+22 logit, -5 xgb sur point
-      estimé) — proposé à Rémi plutôt que fait par Blanquette, réutilise son infrastructure de
-      bootstrap et sa matrice de coûts nouvellement disponible
-- [ ] Mettre à jour `notebooks/05_performance.ipynb` avec les résultats à 5 modèles et les 3
+      `reports/stability/`) sur l'écart de P&L base vs mitigé (+22 logit, -5 xgb, +16 tabicl sur
+      point estimé) — proposé à Rémi plutôt que fait par Blanquette, réutilise son
+      infrastructure de bootstrap et sa matrice de coûts nouvellement disponible
+- [ ] Mettre à jour `notebooks/05_performance.ipynb` avec les résultats à 6 modèles et les 3
       métriques XPER (actuellement narre encore l'ancienne version à 3 modèles/X=2,Y=0.5)
 
 
