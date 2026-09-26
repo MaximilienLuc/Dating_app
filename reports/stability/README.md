@@ -1,6 +1,14 @@
 # Stability
 
-Rémi's contribution to HEC Match. Preliminary results for the group's v0 logit and XGBoost, using the existing data and session split. TabPFN remains to be added when Alex's implementation is ready.
+Three models are evaluated on the same held-out sessions. Only logit and XGBoost are refitted.
+
+| Analysis | Logit | XGBoost | TabICL |
+| :--- | :---: | :---: | :---: |
+| Fixed-model test AUC and session bootstrap | Yes | Yes | Yes |
+| AUC per held-out session | Yes | Yes | Yes |
+| Training-session resampling | Yes | Yes | No |
+| Prediction changes and decision flips | Yes | Yes | No |
+| Coefficient/importance distances | Yes | Yes | No |
 
 ## Reproduce
 
@@ -11,46 +19,40 @@ python -m src.stability --refits 200 --eval-bootstrap 2000
 jupyter nbconvert --to notebook --execute 04_stability.ipynb --output 04_stability.executed.ipynb
 ```
 
-The GitHub Actions workflow runs the same commands and uploads the results and executed notebook. It does not overwrite the group's saved models or data. Models are refitted from the reviewed v0 hyperparameters; results do not describe the serialized joblib files or future tuned models.
+Run from the repository root. The source notebook checks input hashes before displaying results. The script never loads the group's serialized models or trains TabICL. It refits logit/XGBoost with the v0 hyperparameters and current feature contract. TabICL probabilities come from `data/tabicl_predictions.parquet`, joined by `(iid, pid, wave)` with uniqueness and coverage checks. The supplied export has no embedded training/data provenance manifest: its compatibility beyond keys relies on the group's export process; regenerate it when its training inputs change.
 
-## What is measured
+## Method
 
-- **Training sensitivity:** 200 draws of the 15 training sessions, with replacement. Refit both models and preprocessing on the same draws. Keep the test encounters, estimator seed and threshold fixed. Report AUC, prediction changes and decision flips relative to the reference fit.
-- **Test uncertainty:** 2,000 paired draws of the six test sessions, keeping the fitted models fixed. Report pooled AUC intervals and the paired logit minus XGBoost AUC difference.
-- **Explanation sensitivity:** logit coefficients expressed per original training-set standard deviation; within-model cosine distance for these coefficients and XGBoost gain vectors. These two distances are not interchangeable.
+The logit uses `features_logit`; XGBoost uses `features`. Legacy contracts fall back to the shared list, but cloud publication requires the reduced logit list. The split and seed stay fixed.
 
-Rows from a session stay together. Resampling individual encounters would break the dependence between repeated participants and reciprocal pairs. Participants on either side of a pair must be disjoint across train and test; the script checks this.
+- **Training sensitivity:** 200 paired draws of entire training sessions with replacement. Refit preprocessing and each estimator, then evaluate on the same fixed test encounters. Hold the estimator seed fixed. This measures training-data sensitivity, not algorithmic seed sensitivity.
+- **Test uncertainty:** 2,000 paired draws of entire test sessions with replacement. Predictions are fixed for all three models. Report pooled, encounter-weighted AUC and pairwise AUC differences. This is a session bootstrap, not GroupKFold cross-validation.
+- **Explanation sensitivity:** Euclidean and cosine distances from each model's reference vector. Logit coefficients use a common scale (original training-set standard deviations); XGBoost uses normalized gain importance. Compare distances within a model, not between these different vector types.
 
-The threshold is provisionally 0.5. No parameter or threshold is selected using the test set. Refit percentile ranges describe sensitivity, not a confidence interval on which model is best. Six test sessions are too few for strong generalization claims.
+Decision flips use a provisional threshold of 0.5. No feature, parameter or threshold is selected on the test set. Training-resample ranges describe sensitivity, not classical confidence intervals. There are only six held-out sessions, so test intervals are exploratory. TabICL training stability is unknown, not zero.
 
-## Integration
+The existing logit is already L2-regularized with C=1. Elastic Net or alternative regularization strengths would require a separate, internally validated experiment. An XGBoost performance/stability trade-off likewise requires comparing configurations, not just observing importance variance. Optimal P&L threshold stability is deferred until the group defines its cost matrix and validation protocol.
 
-- `summary.json`: aggregate metrics and input hashes for the app.
-- `refits.csv`: one row per model and training resample.
-- `test_bootstrap.csv`: paired fixed-model test resamples.
-- `by_session.csv`: performance and sample size in each held-out session.
+## Files for the app and slides
+
+- `summary.json`: model coverage, exact feature lists, aggregate results, versions and hashes.
+- `refits.csv`: logit/XGBoost training resamples only.
+- `test_bootstrap.csv`: all three fixed models and paired differences.
+- `by_session.csv`: sample sizes and per-session AUC.
 - `logit_coefficients.csv`: coefficient ranges and sign agreement.
-- `stability.png`, `coefficients.png`: generated by the notebook for the app/slides.
+- `stability.png`, `coefficients.png`: charts from the executed notebook.
+- `provenance.json`: cloud run and source revision.
 
-Before the final delivery, rerun on the frozen features, final models and validation-selected business threshold. Add TabPFN to the same paired draws; do not present the two-model analysis as complete. The current `imprace_A/B` feature decision belongs with the fairness audit. No participant-level predictions are exported.
+[Executed notebook](../../04_stability.executed.ipynb)
 
-## Point for the fairness audit
+## Verified cloud results
 
-In the current prepared data, 126 rows have a missing `race_A` or `cand_race`, while `same_race` is encoded as 0. Unknown race should stay unknown in the audit, rather than count as a known different-race pair. This does not enter our models (the protected columns are excluded). Coordinate that data correction with Alex and Blanche before the final fairness analysis.
-
-## Current cloud results
-
-[Executed notebook](../../04_stability.executed.ipynb) · [Successful cloud run](https://github.com/MaximilienLuc/Dating_app/actions/runs/35986538526)
-
-| Model | Reference AUC | Mean decisions changed after refitting |
+| Model | AUC | Mean decision flips at 0.5 |
 | :--- | ---: | ---: |
-| Logit | 0.585 | 16.6% |
-| XGBoost | 0.612 | 21.3% |
+| Logit | 0.589 | 16.7% |
+| XGBoost | 0.614 | 21.4% |
+| TabICL | 0.632 | Not measured |
 
-The paired test-session interval for the AUC difference (logit minus XGBoost) is [-0.045, 0.067]. It includes zero. The results do not establish a decisive AUC advantage, and the recommendations are sensitive to which training sessions are sampled.
+All three paired 95% percentile intervals for AUC differences include zero. Six test sessions do not establish a clear winner. Decision flips measure sensitivity to training samples, not mistakes against ground truth.
 
-The local macOS pilot gave XGBoost AUC 0.604 versus 0.612 on the Linux cloud run, with matching declared package versions. The cause has not been isolated. Use the committed cloud outputs consistently; they are not claimed to reproduce the group's saved model bit for bit. See `provenance.json`.
-
-![Training sensitivity and session performance](stability.png)
-
-![Coefficient stability](coefficients.png)
+[Cloud run](https://github.com/MaximilienLuc/Dating_app/actions/runs/36034895577): 200 refits per trainable model, 2,000 paired test resamples, 18 passing tests and an executed notebook. No participant-level predictions are exported by this analysis.

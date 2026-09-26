@@ -25,8 +25,21 @@ def session_sample(groups, rng):
                            for g in rng.choice(unique, len(unique), replace=True)])
 
 
+def model_features(name, contract):
+    """Preserve the contract's feature order, independently for each estimator."""
+    selected = contract.get('features_logit', contract['features']) if name == 'logit' else contract['features']
+    if not isinstance(selected, list) or not selected or not all(isinstance(c, str) for c in selected):
+        raise ValueError(f'{name}: feature list must be a nonempty list of column names')
+    if len(selected) != len(set(selected)):
+        raise ValueError(f'{name}: duplicate features')
+    forbidden = set(contract['protected']) | {contract['target'], 'iid', 'pid', 'wave', 'dec', 'match', 'dec_o'}
+    if forbidden.intersection(selected):
+        raise ValueError('Protected attributes, identifiers or outcomes in features')
+    return list(selected)
+
+
 def validate_contract(data, contract, split):
-    features = contract['features']
+    features = list(dict.fromkeys(model_features('logit', contract) + model_features('xgb', contract)))
     if len(features) != len(set(features)):
         raise ValueError('Duplicate features')
     forbidden = set(contract['protected']) | {'iid', 'pid', 'wave', 'dec', 'match', 'dec_o'}
@@ -97,6 +110,23 @@ def interval(values):
                 p975=float(np.quantile(values, .975)), valid=len(values))
 
 
+def frozen_tabicl_predictions(test, predictions):
+    """One-to-one key join; never rely on export row order or load a model."""
+    keys = ['iid', 'pid', 'wave']
+    required = keys + ['tabicl_proba']
+    if set(required) - set(predictions):
+        raise ValueError('TabICL prediction columns missing')
+    if predictions[keys].isna().any().any() or predictions.duplicated(keys).any():
+        raise ValueError('TabICL prediction keys must be non-null and unique')
+    if test.duplicated(keys).any():
+        raise ValueError('Test encounter keys are not unique')
+    joined = test[keys].merge(predictions[required], on=keys, how='left', sort=False, validate='one_to_one')
+    p = joined.tabicl_proba.to_numpy(dtype=float)
+    if not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
+        raise ValueError('Missing, non-finite or out-of-range TabICL test predictions')
+    return p
+
+
 def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
     root, output = Path(root), Path(output)
     if n_refits < 2 or n_eval < 2 or not 0 < threshold < 1:
@@ -106,15 +136,17 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
     data = pd.read_parquet(root / 'data/clean.parquet')
     train, test = validate_contract(data, contract, split)
     features, target = contract['features'], contract['target']
-    X, y = train[features], train[target].to_numpy()
-    Xt, yt = test[features], test[target].to_numpy()
-    reference_sd = X.std(ddof=0).fillna(0).to_numpy()
+    y, yt = train[target].to_numpy(), test[target].to_numpy()
     names = ['logit', 'xgb']
+    features_by_model = {name: model_features(name, contract) for name in names}
+    X = {name: train[features_by_model[name]] for name in names}
+    Xt = {name: test[features_by_model[name]] for name in names}
+    reference_sd = X['logit'].std(ddof=0).fillna(0).to_numpy()
     baselines, scores, vectors = {}, {}, {}
     for name in names:
-        model = model_factory(name, seed).fit(X, y)
+        model = model_factory(name, seed).fit(X[name], y)
         baselines[name] = model
-        scores[name] = model.predict_proba(Xt)[:, 1]
+        scores[name] = model.predict_proba(Xt[name])[:, 1]
         vectors[name] = importance_vector(model, name, reference_sd)
         print(f'{name}: reference AUC {auc_or_nan(yt, scores[name]):.4f}', flush=True)
 
@@ -126,40 +158,52 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
         if np.unique(y[indices]).size < 2:
             raise ValueError('One-class training bootstrap; inspect the dataset')
         for name in names:
-            model = model_factory(name, seed).fit(X.iloc[indices], y[indices])
-            p = model.predict_proba(Xt)[:, 1]
+            model = model_factory(name, seed).fit(X[name].iloc[indices], y[indices])
+            p = model.predict_proba(Xt[name])[:, 1]
             importance = importance_vector(model, name, reference_sd)
             refits.append(dict(model=name, replicate=b, auc=auc_or_nan(yt, p),
                                flip_rate=float(np.mean((p >= threshold) != (scores[name] >= threshold))),
                                probability_mae=float(np.mean(np.abs(p - scores[name]))),
-                               vector_cosine_distance=cosine_distance(importance, vectors[name])))
+                               vector_cosine_distance=cosine_distance(importance, vectors[name]),
+                               vector_euclidean_distance=float(np.linalg.norm(importance - vectors[name]))))
             coefficients.append(importance if name == 'logit' else None)
         if (b + 1) % 20 == 0 or b + 1 == n_refits:
             print(f'{b + 1}/{n_refits} paired training-session refits', flush=True)
     refits = pd.DataFrame(refits)
     betas = np.stack([v for v in coefficients if v is not None])
-    coef = pd.DataFrame({'feature': features, 'reference_beta': vectors['logit'],
+    coef = pd.DataFrame({'feature': features_by_model['logit'], 'reference_beta': vectors['logit'],
                          'p025': np.quantile(betas, .025, axis=0),
                          'p975': np.quantile(betas, .975, axis=0),
                          'sign_agreement': np.mean(np.sign(betas) == np.sign(vectors['logit']), axis=0)})
+
+    prediction_path = root / 'data/tabicl_predictions.parquet'
+    if prediction_path.exists():
+        scores['tabicl'] = frozen_tabicl_predictions(test, pd.read_parquet(prediction_path))
+    evaluated_names = list(scores)
 
     # Separate test uncertainty: fixed fitted models, resampling only test sessions.
     rng_eval = np.random.default_rng(seed + 1)
     evaluations = []
     for b in range(n_eval):
         idx = session_sample(test.wave, rng_eval)
-        a, z = (auc_or_nan(yt[idx], scores[n][idx]) for n in names)
-        evaluations.append(dict(replicate=b, logit_auc=a, xgb_auc=z, logit_minus_xgb=a-z))
+        row = {'replicate': b, **{f'{name}_auc': auc_or_nan(yt[idx], scores[name][idx]) for name in evaluated_names}}
+        for i, left in enumerate(evaluated_names):
+            for right in evaluated_names[i+1:]:
+                row[f'{left}_minus_{right}'] = row[f'{left}_auc'] - row[f'{right}_auc']
+        evaluations.append(row)
     evaluations = pd.DataFrame(evaluations)
     per_session = []
     for wave in sorted(test.wave.unique()):
         mask = test.wave.to_numpy() == wave
-        for name in names:
+        for name in evaluated_names:
             per_session.append(dict(model=name, wave=int(wave), n=int(mask.sum()),
                                     positive_rate=float(yt[mask].mean()), auc=auc_or_nan(yt[mask], scores[name][mask])))
     summary = {
-        'status': 'preliminary_v0', 'models_run': names,
-        'tabpfn': {'status': 'pending', 'reason': 'No TabPFN training implementation in the v0 contract; rerun stability when available.'},
+        'status': 'current_feature_contract', 'models_run': evaluated_names,
+        'models_refitted': names, 'models_test_evaluated': evaluated_names,
+        'tabicl': {'status': 'test_only' if 'tabicl' in scores else 'pending', 'reason': 'Frozen predictions only; no training resamples, decision-flip analysis or importance-vector distances for TabICL.'},
+        'features_by_model': features_by_model,
+        'logit_feature_source': 'features_logit' if 'features_logit' in contract else 'features (legacy fallback; reduced contract not supplied)',
         'train_rows': len(train), 'test_rows': len(test), 'features': len(features),
         'train_waves': sorted(split['train_waves']), 'test_waves': sorted(split['test_waves']),
         'seed': seed, 'threshold': threshold, 'n_refits': n_refits, 'n_eval': n_eval,
@@ -170,23 +214,25 @@ def run(root, output, n_refits=200, n_eval=2000, seed=42, threshold=.5):
             'xgb_vector': 'Normalized gain importance, compared only within XGBoost; not comparable to coefficient distances.',
             'threshold': '0.5 is a provisional display rule, not a tuned business threshold.' if threshold == .5 else 'Externally supplied fixed threshold; this script does not optimize it.',
         },
-        'limitations': ['Only six test sessions: uncertainty estimates are exploratory.',
+        'limitations': [f'Only {test.wave.nunique()} test sessions: uncertainty estimates are exploratory.',
                         'Refit percentile ranges describe sensitivity, not confidence intervals for the best model.',
                         'The v0 feature set includes imprace_A/B; the group must decide whether to retain them.',
                         'Results must be regenerated after any data, feature, model or threshold change.',
-                        'No TabPFN results yet. No fairness or production-readiness conclusion from this analysis.'],
+                        'TabICL is evaluated on frozen predictions only, not training sensitivity. No production-readiness conclusion.'],
         'models': {},
         'paired_auc_difference': interval(evaluations.logit_minus_xgb),
+        'paired_auc_differences': {c: interval(evaluations[c]) for c in evaluations if '_minus_' in c},
         'inputs_sha256': {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
-                          for name in ['data/clean.parquet', 'data/features.json', 'data/split.json', '01_data_models_v0.py']},
+                          for name in ['data/clean.parquet', 'data/features.json', 'data/split.json', '01_data_models_v0.py', 'src/stability.py'] + (['data/tabicl_predictions.parquet'] if prediction_path.exists() else [])},
         'versions': {name: importlib.metadata.version(name) for name in ['numpy','pandas','scikit-learn','xgboost']},
     }
-    for name in names:
+    for name in evaluated_names:
         subset = refits[refits.model == name]
         summary['models'][name] = {
             'reference_auc': auc_or_nan(yt, scores[name]),
             'test_auc_interval': interval(evaluations[f'{name}_auc']),
-            **{col: interval(subset[col]) for col in ['auc','flip_rate','probability_mae','vector_cosine_distance']},
+            **{col: interval(subset[col]) for col in ['auc','flip_rate','probability_mae','vector_cosine_distance','vector_euclidean_distance'] if name in names},
+            'training_stability_available': name in names,
         }
     output.mkdir(parents=True, exist_ok=True)
     refits.to_csv(output/'refits.csv', index=False)

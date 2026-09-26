@@ -65,3 +65,97 @@ def test_all_missing_bootstrap_column_keeps_feature_alignment():
 def test_single_class_auc_is_explicitly_missing():
     assert np.isnan(auc_or_nan([0,0],[.1,.2]))
     assert auc_or_nan([0,1],[.1,.2]) == roc_auc_score([0,1],[.1,.2])
+
+
+def test_model_specific_features_keep_order_and_do_not_mutate_contract():
+    from src.stability import model_features
+    c={'features':['a','shar1_1_A','b','shar1_1_B'], 'features_logit':['b','a'],
+       'target':'dec','protected':['race']}
+    assert model_features('logit',c) == ['b','a']
+    assert model_features('xgb',c) == ['a','shar1_1_A','b','shar1_1_B']
+    selected=model_features('logit',c)
+    selected.append('new')
+    assert c['features_logit'] == ['b','a']
+
+
+def test_legacy_contract_falls_back_to_shared_features():
+    from src.stability import model_features
+    _, c, _=contract()
+    assert model_features('logit',c) == c['features']
+
+
+def test_rejects_protected_attributes_in_logit_only_list():
+    d,c,s=contract()
+    c['features_logit']=['x','gender']
+    with pytest.raises(ValueError, match='Protected'):
+        validate_contract(d,c,s)
+
+
+def test_rejects_missing_logit_only_column():
+    d,c,s=contract()
+    c['features_logit']=['not_in_data']
+    with pytest.raises(ValueError, match='Missing columns'):
+        validate_contract(d,c,s)
+
+
+def test_run_uses_model_specific_columns_for_reference_and_every_refit(tmp_path, monkeypatch):
+    from src import stability
+    d,c,s=contract()
+    d['extra']=[2.,3.,4.,5.]
+    c['features']=['x','extra']
+    c['features_logit']=['x']
+    (tmp_path/'data').mkdir()
+    (tmp_path/'src').mkdir()
+    d.to_parquet(tmp_path/'data/clean.parquet',index=False)
+    import json
+    (tmp_path/'data/features.json').write_text(json.dumps(c))
+    (tmp_path/'data/split.json').write_text(json.dumps(s))
+    (tmp_path/'01_data_models_v0.py').write_text('# fixture')
+    (tmp_path/'src/stability.py').write_text('# fixture')
+    frozen=d[['iid','pid','wave']].copy()
+    frozen['tabicl_proba']=[.2,.8,.3,.7]
+    frozen.iloc[::-1].to_parquet(tmp_path/'data/tabicl_predictions.parquet',index=False)
+    seen=[]
+    class Estimator:
+        def __init__(self,name): self.name=name
+        def fit(self,X,y):
+            expected=['x'] if self.name=='logit' else ['x','extra']
+            assert list(X.columns)==expected
+            self.columns=list(X.columns)
+            seen.append(self.name)
+            return self
+        def predict_proba(self,X):
+            assert list(X.columns)==self.columns
+            return np.column_stack([np.full(len(X),.4),np.full(len(X),.6)])
+    monkeypatch.setattr(stability,'model_factory',lambda name,seed:Estimator(name))
+    monkeypatch.setattr(stability,'importance_vector',lambda model,name,sd:np.ones(len(model.columns)))
+    report=stability.run(tmp_path,tmp_path/'results',n_refits=2,n_eval=2)
+    assert seen.count('logit')==3 and seen.count('xgb')==3
+    assert set(seen)=={'logit','xgb'}
+    assert report['tabicl']['status']=='test_only'
+    assert 'flip_rate' not in report['models']['tabicl']
+    assert report['models']['tabicl']['reference_auc']==1.0
+    assert 'logit_minus_tabicl' in report['paired_auc_differences']
+    assert report['features_by_model']=={'logit':['x'],'xgb':['x','extra']}
+    assert pd.read_csv(tmp_path/'results/logit_coefficients.csv').feature.tolist()==['x']
+
+
+def test_tabicl_key_join_restores_test_order_and_allows_train_rows():
+    from src.stability import frozen_tabicl_predictions
+    d,_,_=contract()
+    predictions=d[['iid','pid','wave']].copy()
+    predictions['tabicl_proba']=[.1,.2,.3,.4]
+    np.testing.assert_allclose(frozen_tabicl_predictions(d.iloc[2:],predictions.iloc[::-1]),[.3,.4])
+
+
+@pytest.mark.parametrize('failure',['duplicate','missing','nan','range'])
+def test_tabicl_rejects_bad_predictions(failure):
+    from src.stability import frozen_tabicl_predictions
+    d,_,_=contract()
+    p=d[['iid','pid','wave']].copy()
+    p['tabicl_proba']=.5
+    if failure=='duplicate': p=pd.concat([p,p.iloc[:1]])
+    if failure=='missing': p=p.iloc[1:]
+    if failure=='nan': p.loc[0,'tabicl_proba']=np.nan
+    if failure=='range': p.loc[0,'tabicl_proba']=1.1
+    with pytest.raises(ValueError): frozen_tabicl_predictions(d,p)

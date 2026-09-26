@@ -256,6 +256,116 @@ et XPER appliqué directement au P&L plutôt qu'à l'AUC seule.
   3. *Graphiques du rapport générés* : `reports/fairness/tost_intervals.png` (intervalles de confiance TOST vs zone
      d'équivalence [−10 pp, +10 pp]) et `reports/fairness/racial_exposure_rates.png` (taux d'exposition réels vs prédits).
 
+## Mitigation du biais : suppression de proxys via FPDP (Option A)
+- **Principe méthodologique (Pérignon & Saurin)** : pré-traitement rigoureux où une variable candidate
+  $X_A$ est identifiée si elle est à l'origine du rejet de l'hypothèse nulle d'équité. Par balayage
+  FPDP (Fairness Partial Dependence Plot) sur `X_train`, on force chaque variable à une valeur constante
+  $c_k$ (déciles pour les variables continues, valeurs uniques pour les discrètes/indicatrices) et on
+  évalue la métrique de fairness.
+- **4 variables candidates identifiées et supprimées (`PROXY_FEATURES_TO_DROP`)** :
+  1. `attr3_1_B` (auto-évaluation d'attractivité déclarée par le candidat B) : neutraliser cette variable
+     sur le train fait chuter l'écart Caucasiens vs Asiatiques de $+12.65\%$ à $+7.94\%$ et valide
+     simultanément l'ensemble des tests d'équivalence raciale sur le train.
+  2. `career_c_B_12` (code carrière spécifique du candidat B) : neutralise la disparité sur le groupe Autres.
+  3. `go_out_B` (fréquence de sorties du candidat B) : neutralise la disparité sur le groupe Autres.
+  4. `intel3_1_B` (auto-évaluation d'intelligence du candidat B) : neutralise la disparité sur le groupe Autres.
+- **Modèles ré-entraînés sur le sous-ensemble épuré (160 variables au lieu de 164)** :
+  - `models/xgb_mitigated.joblib` et `models/logit_mitigated.joblib`
+  - Métadonnées et contrats sauvegardés : `data/mitigated_features.json` et `data/mitigation_metrics.json`
+- **Bilan de l'arbitrage Utilité-Fairness (Trade-off) sur le test set** :
+  - **Sur Logit** : l'écart Caucasiens vs Asiatiques passe de **+10.19 pp** à **+8.20 pp** (rentre sous la
+    barre des 10 pp de tolérance !), au prix d'un coût d'utilité quasi nul ($\Delta\text{AUC} = −0.007$,
+    $0.587 \rightarrow 0.581$).
+  - **Sur XGBoost** : l'écart Caucasiens vs Autres est presque totalement effacé (**+9.91 pp $\rightarrow$ −0.66 pp**),
+    l'écart Caucasiens vs Noirs passe de $+2.08\text{ pp}$ à $+0.20\text{ pp}$, et l'écart vs Asiatiques est réduit
+    de $+11.12\text{ pp}$ à $+10.77\text{ pp}$.
+  - **Préservation de la performance économique et statistique** : l'AUC test de XGBoost est intacte
+    ($0.604 \rightarrow 0.612$), et le profit total au seuil P&L optimal calibré sur train ($t^*=0.36$) reste
+    positif ($+286\text{ €} \rightarrow +290\text{ €}$).
+  - *Graphique synthétique exporté* : `reports/fairness/mitigation_tradeoff.png` (évolution des écarts raciaux
+    et comparaison d'AUC avant/après).
+
+## Décomposition biais sociétal vs biais algorithmique (3 modèles incl. TabICL)
+
+**Contexte** : les tests TOST échouent pour les groupes Asian et Latino quel que soit le seuil de
+décision ou la mitigation. La question posée en soutenance sera inévitablement : "vos modèles
+sont-ils racistes ?". La réponse correcte distingue deux couches de biais, qu'on a maintenant
+mesurées précisément (`src/fairness_bias_decomposition.py`, graphique `reports/fairness/bias_decomposition.png`).
+
+### Définitions formelles
+
+Soit $p_{\text{cauc}}^{\text{données}}$ le taux de oui réel dans $y_{\text{test}}$ pour les Caucasiens, et
+$p_g^{\text{données}}$ le même taux pour le groupe $g$. Soit $\hat{p}_{\text{cauc}}$ et $\hat{p}_g$
+les taux d'exposition prédits par le modèle au seuil $t$.
+
+$$\text{biais\_sociétal}(g) = p_{\text{cauc}}^{\text{données}} - p_g^{\text{données}}$$
+$$\text{biais\_total}(g) = \hat{p}_{\text{cauc}} - \hat{p}_g$$
+$$\text{biais\_algorithmique}(g) = \text{biais\_total}(g) - \text{biais\_sociétal}(g)$$
+
+Le biais algorithmique est ce que le **modèle ajoute** au-delà du biais présent dans les données
+brutes. Un modèle parfaitement neutre aurait un biais algorithmique = 0 pour tous les groupes.
+
+### Niveau 1 — Biais sociétal (données brutes Speed Dating, test set)
+
+Taux de "oui" réels dans les données, **avant tout modèle** :
+
+| Groupe | Taux de oui | Écart vs Caucasiens | n |
+|---|---|---|---|
+| **Caucasiens** | **43.9%** | — | 1109 |
+| Latinos | 50.4% | **−6.5 pp** (sur-aimés) | 135 |
+| Autres | 48.2% | −4.3 pp | 56 |
+| Noirs | 46.2% | −2.2 pp | 130 |
+| Asiatiques | 35.3% | **+8.6 pp** (sous-aimés) | 391 |
+
+Ces écarts sont documentés dans la littérature (Fisman & Iyengar, 2006 ; Hitsch, Hortaçsu &
+Ariely, 2010) et reflètent des préférences réelles des participants du dataset. **L'algorithme
+ne les invente pas.** En particulier, la sous-représentation des Asiatiques (+8.6 pp de gap
+dans les données brutes) explique structurellement pourquoi tous les modèles exhibent un gap
+positif vs Asiatiques : ils *apprennent* cette préférence humaine via les proxys.
+
+### Niveau 2 — Biais algorithmique pur (à t = 0.50)
+
+Ce que chaque modèle *ajoute* au-delà du biais sociétal :
+
+| Modèle | vs Noirs | vs Latinos | vs Asiatiques | vs Autres |
+|---|---|---|---|---|
+| **XGBoost** | +4.2 pp | −2.2 pp | +2.1 pp | +0.8 pp |
+| **Logit** | −1.2 pp | **−12.5 pp** | +1.4 pp | −0.2 pp |
+| **TabICL** | +1.5 pp | −7.9 pp | +1.7 pp | +9.1 pp |
+
+**Lecture** : un biais algorithmique proche de 0 signifie que le modèle ne discrimine pas
+au-delà de ce que font les humains dans les données. Un biais négatif vs Latino pour le Logit
+(−12.5 pp) signifie que le Logit *amplifie fortement* la discrimination envers les Latinos
+au-delà du biais sociétal. XGBoost, lui, est quasi neutre algorithmiquement (biais ≤ 4 pp
+sur tous les groupes). TabICL amplifie la discrimination envers les "Autres" (+9.1 pp).
+
+**Conclusion pour la soutenance** :
+- **XGBoost** est le modèle le plus equitable algorithmiquement. Ses échecs au TOST (Latino,
+  Asian) viennent presque entièrement du biais sociétal et non d'un biais ajouté. Il passe
+  même le TOST pour les Noirs (biais sociétal faible de −2.2 pp → facile à contenir).
+- **Logit** amplifie massivement la discrimination envers les Latinos (−12.5 pp purement
+  algorithmiques) : comportement non défendable pour un déploiement, indépendamment du TOST.
+- **TabICL** est intermédiaire mais présente une anomalie sur le groupe "Autres" (+9.1 pp),
+  à documenter comme limite de la généralisation du modèle sur les petits effectifs.
+- *Script* : `src/fairness_bias_decomposition.py` | *Données* : `data/fairness_bias_decomposition.json`
+- *Graphique* : `reports/fairness/bias_decomposition.png` (Panel A = biais total sociétal+algo,
+  Panel B = biais algorithmique pur isolé)
+
+### Résultats TOST complets — TabICL (t = 0.50, δ = 10 pp)
+
+| Comparaison | Gap total | Biais algo pur | TOST |
+|---|---|---|---|
+| vs Noirs | −0.7 pp | +1.5 pp | ✅ Fair |
+| vs Latinos | −14.4 pp | −7.9 pp | ❌ Unfair |
+| vs Asiatiques | +10.3 pp | +1.7 pp | ❌ Unfair |
+| vs Autres | +4.8 pp | +9.1 pp | ❌ Unfair |
+
+TabICL passe le test vs Noirs (biais sociétal faible + biais algo faible = gap total dans
+la zone d'équivalence). Il échoue sur Latino (principalement biais algorithmique amplifié)
+et sur Autres (biais sociétal faible mais biais algorithmique fort, probablement lié au
+très petit effectif $n=56$). Pas de modèle sauvegardé TabICL en local (contrainte CUDA) —
+l'évaluation s'appuie sur `data/tabicl_predictions.parquet` (inférence GPU Colab).
+
 ## À faire (pas encore réalisé, à ne pas oublier)
 - [x] Construire la matrice de coûts P&L et implémenter le calcul du profit total pour un seuil
       donné, à partir des prédictions des 3 modèles — fait, `calculate_pnl()` dans
@@ -283,6 +393,8 @@ et XPER appliqué directement au P&L plutôt qu'à l'AUC seule.
       diagnostic du crash CPU et décision" et le tableau dans "Validation croisée"
 - [x] Réentraîner TabICL sur Colab avec le features.json post-correction dummies (158
       features au lieu de 164) — fait, résultat quasi identique (0.632/0.591±0.038)
+- [x] Entraîner une variante des modèles avec proxys neutralisés/retirés pour comparer la
+      disparité avant/après (2e passe de feature engineering fairness via FPDP) — fait
 - [ ] Prévenir Max : le logit a maintenant un features_logit distinct de features -- toute
       interprétation (SHAP/coefficients) du logit déjà commencée sur l'ancien schéma sera à
       refaire
@@ -297,3 +409,54 @@ et XPER appliqué directement au P&L plutôt qu'à l'AUC seule.
   alchimie à partir d'un profil pré-rencontre), pas un choix d'algorithme sous-optimal
 - XGBoost retenu comme modèle ML officiel : gère nativement les NaN (pertinent vu le taux de
   missing sur income), permet d'exploiter income_missing_A/B plus finement que RF
+
+
+## Stabilité (Rémi) : contrat de variables par modèle
+- Le logit doit utiliser `contract.get("features_logit", contract["features"])` ; XGBoost
+  conserve `features`. Cela s'applique au modèle de référence, à chaque réentraînement,
+  aux prédictions et aux coefficients exportés. Le split par wave et seed=42 restent inchangés.
+- D'après le message de Blanche, retirer `shar1_1_A` et `shar1_1_B` sert à lever la dépendance
+  entre les six parts de préférences. Les coefficients sont donc à réinterpréter avec une
+  catégorie de référence implicite ; ce retrait ne garantit pas à lui seul l'absence de toute
+  autre colinéarité.
+- Les résultats de stabilité déjà publiés sont historiques, antérieurs au nouveau contrat.
+  Ils ne doivent pas servir de chiffres pour le logit corrigé. Relance en attente de la
+  publication de `features_logit` (absent du main vérifié au commit 4cd5bfe).
+- TabICL remplace TabPFN, conformément à la décision transmise par Blanche. Aucun résultat
+  TabICL de stabilité n'est revendiqué avant disponibilité de sa configuration d'entraînement.
+- Les dépendances de stabilité utilisent désormais les versions épinglées du groupe.
+- Le test final reste hors réglage des variables, des hyperparamètres et du seuil. Les
+  réévaluations de stabilité sont descriptives ; le test a déjà été consulté lors de la v0,
+  il ne serait donc pas exact de le présenter comme totalement inédit à la soutenance.
+
+## Stabilité : intégration des prédictions TabICL (Rémi)
+- Source d'intégration : branche `blanche`, commit `5a3b1b3`. `features_logit` est bien
+  disponible sur cette branche ; le constat d'absence sur main ci-dessus était daté.
+- Trois modèles évalués côté test, deux réentraînés côté train. TabICL est joint par
+  `(iid, pid, wave)` avec contrôle d'unicité, de couverture et de probabilités valides.
+  Aucun chargement de son modèle CUDA et aucun réentraînement TabICL ne sont effectués.
+- Bootstrap par sessions avec remplacement, pas GroupKFold. Les tirages test sont les mêmes
+  pour les trois modèles. TabICL : incertitude de performance uniquement, aucune conclusion
+  sur les changements de décisions ou d'importance après réentraînement.
+- Ajout de la distance euclidienne, en complément de la distance cosinus : coefficients
+  logit exprimés dans une unité commune (écart-type du train original), gains normalisés
+  pour XGBoost. Les distances des deux familles ne se comparent pas directement.
+- Le logit existant utilise déjà la pénalité L2 par défaut de scikit-learn (C=1).
+  Une comparaison Elastic Net ou un autre niveau de régularisation serait une expérience
+  supplémentaire à sélectionner en validation interne par wave, pas sur le test final.
+- Aucun arbitrage performance/stabilité de XGBoost n'est démontré par la seule variance
+  des importances. Il faudrait comparer des configurations prédéfinies en validation interne.
+- Le déplacement du seuil optimal P&L est une extension différée : coûts et seuil métier
+  ne sont pas encore fixés. Le taux de bascule actuel utilise le seuil descriptif 0,5.
+
+
+### Résultats de stabilité actualisés
+- Run cloud `36034895577`, code `64b37a5`, données de Blanche `5a3b1b3` :
+  200 réentraînements par modèle (logit/XGBoost), 2 000 bootstraps test appariés (les trois).
+- AUC : logit 0,589 ; XGBoost 0,614 ; TabICL 0,632. Les trois intervalles de différence
+  appariée incluent zéro. Ne pas annoncer de supériorité statistique démontrée.
+- Décisions qui basculent après réentraînement : 16,7% logit, 21,4% XGBoost en moyenne
+  au seuil fixe 0,5. Ce ne sont pas des taux d'erreur. Non mesuré pour TabICL.
+- Ces exports remplacent les anciens résultats gelés ; les remarques d'attente ci-dessus
+  décrivent l'état antérieur de main. L'intégration utilise bien `features_logit` (156 variables)
+  et `features` (158), avec le split original et seed=42.
