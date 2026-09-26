@@ -73,10 +73,14 @@ y_train = train["dec"].to_numpy()
 X_test = test[FEATURES].to_numpy()
 y_test = test["dec"].to_numpy()
 
-# Parametres tres reduits pour eviter l'OOM (voir avertissement en tete de fichier -- max_workers=60
-# code en dur dans XPER, N_coalition_sampled bas = moins de forward pass TabICL concurrents) :
-SAMPLE_SIZE = 20
-N_COALITION_SAMPLED = 15
+# DERNIER TEST, extreme : a rejete un 2e crash OOM meme a 15/20 -- ce n'est probablement pas
+# (seulement) les 60 threads concurrents, plutot le fait qu'UN SEUL forward pass TabICL avec
+# ~6500 lignes de train comme contexte est deja tres lourd (attention transformer scale au
+# carre avec la taille du contexte). Si CE test replante aussi, conclusion : XPER-TabICL non
+# calculable sur ce tier Colab -- arreter la, documenter, ne pas insister davantage (optionnel,
+# non bloquant pour la soutenance).
+SAMPLE_SIZE = 10
+N_COALITION_SAMPLED = 3
 
 # ---------------------------------------------------------------------------------------
 # XPER-PNL : decomposition EXACTE de notre P&L reel (calculate_pnl), pas juste un cout de
