@@ -1,6 +1,17 @@
 """
 HEC Match -- XPER sur TabICL (AUC et P&L), sur Colab (script autonome, aucune dependance a src/).
 
+VERDICT FINAL (26/09) -- NE PAS RELANCER : tente 3 fois. Les 2 premieres (N_coalition_sampled=
+300 puis 15) ont fait planter le kernel Colab par saturation memoire. La 3e (N_coalition_
+sampled=3, sample_size=10, parametres actuels du fichier) a termine sans planter mais produit
+un resultat statistiquement degenere -- seulement 8 valeurs uniques sur 158 features dans les
+deux metriques (beaucoup de features a exactement 0), un artefact du sous-echantillonnage
+extreme plutot qu'un vrai signal. XPER-TabICL est acte comme non exploitable en pratique sur ce
+tier Colab -- voir docs/soutenance_notes.md "Performance predictive". Fichiers de la tentative
+gardes dans reports/performance/xper_{pnl,auc}_tabicl.csv, explicitement annotes comme non
+exploitables. Ne pas relancer sans un changement structurel (ex. sous-echantillonner fortement
+le train comme contexte -- change alors le modele evalue, a documenter comme tel).
+
 ATTENTION avant de lancer : XPER interroge le modele reel des CENTAINES/MILLIERS de fois
 (echantillonnage de coalitions de features masquees), pas juste une fois comme
 predict_tabicl.py. Sur logit (rapide, local), meme avec des parametres reduits, ca prend deja

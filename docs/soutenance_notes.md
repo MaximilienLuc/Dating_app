@@ -184,7 +184,25 @@ mis 9h17 (essentiellement veille système, ~2h14 de calcul réel) ; réduit à
 `N_coalition_sampled=150, sample_size=100` → **18.6s par modèle**, run complet des 4 modèles ×
 3 métriques en **~3-4 min total**. Utiliser `caffeinate -w <PID>` pour tout calcul long sur cette
 machine (leçon de l'incident 9h17). **TabICL non calculable en local** (modèle non chargeable) —
-tenté sur Colab via `colab/xper_tabicl.py`, résultat non garanti.
+tenté sur Colab via `colab/xper_tabicl.py`, **conclusion : non exploitable en pratique**, voir
+détail ci-dessous.
+
+**XPER-TabICL sur Colab — tenté, terminé techniquement, résultat statistiquement dégénéré.**
+Deux crashes mémoire successifs (kernel Colab redémarré) à `N_coalition_sampled=300→100→15`,
+malgré une réduction agressive des paramètres. Cause : XPER parallélise le calcul des
+coalitions avec un `ThreadPoolExecutor` à `max_workers=60` codé en dur dans la librairie (non
+configurable), et chaque tâche concurrente est un forward pass complet de TabICL sur ~6500
+lignes de train comme contexte — coût mémoire par appel déjà élevé pour ce type de modèle
+(attention transformer, coût quadratique en taille de contexte), avant même de parler de
+concurrence. Réduit à `N_coalition_sampled=3, sample_size=10` : plus de crash, mais résultat
+**statistiquement dégénéré** — seulement **8 valeurs uniques sur 158 features** dans les deux
+métriques (XPER-PNL et XPER-AUC), 69 features à exactement 0. Avec si peu de coalitions
+échantillonnées, les features se répartissent mécaniquement en quelques classes d'équivalence
+selon laquelle des 3 coalitions les contenait — sans rapport réel avec leur importance.
+**Décision actée : ne pas présenter ces valeurs comme un classement de features, ne pas
+retenter (optionnel, non bloquant, coût Colab déjà investi sur 3 tentatives).** Fichiers gardés
+comme preuve de la tentative (`reports/performance/xper_{pnl,auc}_tabicl.csv`), explicitement
+annotés comme non exploitables plutôt que supprimés silencieusement.
 
 Trois métriques XPER calculées, avec un **bug vérifié dans la librairie XPER** à connaître avant
 de réutiliser `CFP`/`CFN` : ces paramètres sont **inversés en interne** par rapport à leur
@@ -447,8 +465,10 @@ l'évaluation s'appuie sur `data/tabicl_predictions.parquet` (inférence GPU Col
       field_cd) avant de conclure qu'une seule mitigation suffit
 - [ ] Entraîner une variante des modèles avec income neutralisé/retiré pour comparer la
       disparité avant/après (2e passe de feature engineering fairness)
-- [ ] Tenter XPER sur TabICL sur Colab (`colab/xper_tabicl.py`, paramètres réduits, résultat non
-      garanti) — XPER logit/xgb fait en local, income_A/B absent du top 10 des deux
+- [x] Tenter XPER sur TabICL sur Colab (`colab/xper_tabicl.py`) — **tenté, conclu non
+      exploitable** (résultat statistiquement dégénéré, 8 valeurs uniques/158 features aux
+      paramètres qui évitent le crash mémoire) — voir "Performance prédictive" pour le détail.
+      XPER logit/xgb fait en local, income_A/B absent du top 10 des deux
 - [x] Implémenter le retrait de shar1_1_A/B pour le logit uniquement — fait,
       `feature_dict["features_logit"]` dans `src/build_dataset.py`
 - [x] Vérifier/corriger l'encodage des dummies catégorielles (field_cd/career_c/goal),
