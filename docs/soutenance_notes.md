@@ -204,6 +204,29 @@ ne pas se faire piéger si des coûts asymétriques sont utilisés plus tard.
    | Logit mitigé | field_cd_B_9, career_c_B_14, career_c_B_1, career_c_A_4, museums_B |
    | XGBoost mitigé | field_cd_B_9, career_c_B_14, career_c_A_4, intel1_1_B, career_c_B_1 |
 
+   **⚠️ Mise en garde sur `logit_mitigated` — à ne pas présenter sans cette réserve.**
+   Vérifié dans `src/mitigation.py`/`data/mitigated_features.json` : `logit_mitigated` cumule
+   deux problèmes de colinéarité que notre propre pipeline a spécifiquement corrigés, mais que
+   la mitigation de Max n'a pas repris (entraîné sur l'ancien schéma) :
+   1. **Piège des variables muettes** — `drop_first=True` n'est pas appliqué : les 6 colonnes de
+      référence (`field_cd_A_1`, `field_cd_B_1`, `career_c_A_1`, `career_c_B_1`, `goal_A_1`,
+      `goal_B_1`) sont toutes présentes, encodage one-hot complet sur 3 variables catégorielles
+      × 2 côtés.
+   2. **Colinéarité compositionnelle** — `shar1_1_A`/`shar1_1_B` toujours présentes (160
+      features, pas 156) : les 6 préférences sommant à 100 par construction (cf. point 8 du
+      contrat méthodologique) ne sont pas déconfondues, comme documenté dans "Feature
+      engineering".
+   `LogisticRegression(max_iter=5000, random_state=SEED)` chez Max reste sur les valeurs par
+   défaut scikit-learn (L2, C=1, identique à notre logit) : la régularisation absorbe le rang
+   déficient et évite un crash, donc les métriques prédictives (PR-AUC, P&L) restent
+   probablement lisibles telles quelles. Mais l'**interprétabilité en pâtit directement** :
+   `career_c_B_1` — une des 6 colonnes de référence piégées ci-dessus — apparaît dans le top 5
+   XPER-PNL de `logit_mitigated` (et aussi de `xgb_mitigated`, où c'est moins préoccupant, les
+   arbres n'étant pas sensibles à la colinéarité). Probablement un artefact d'encodage plutôt
+   qu'un vrai signal économique — à traiter comme suspect, pas comme un résultat présentable en
+   l'état, tant que Max n'a pas réentraîné `logit_mitigated` sur le schéma 156 features
+   (`features_logit`, `drop_first=True`, `shar1_1` retirée).
+
 **Test de robustesse** (2 scénarios alternatifs, `data/economic_assumptions.json` réécrit
 temporairement puis restauré — jamais de valeur X/Y/Z en dur), voir
 `reports/performance/robustness_test.csv` pour le détail complet des 5 modèles. Constat inchangé

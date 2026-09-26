@@ -97,7 +97,7 @@ XPER étendu à 3 métriques (base + mitigés, logit/xgb) : `AUC` (perf statisti
 
 **Max (interprétabilité)** :
 - Relancer SHAP, LIME, PDP/ICE sur **`xgb_mitigated.joblib`** (pas `xgb.joblib`). Les features `attr3_1_B`, `career_c_B_12`, `go_out_B`, `intel3_1_B` ont été supprimées — elles n'apparaîtront plus dans les graphes SHAP.
-- Pour le Logit, utiliser `features_logit` (156 features, `drop_first=True`) et `logit_mitigated.joblib` — **⚠️ à signaler à Max** : `logit_mitigated.joblib` n'a PAS retiré `shar1_1_A`/`shar1_1_B` (son schéma fait 160 features, pas 156) — la colinéarité parfaite qu'on a corrigée de notre côté (point 8) est probablement toujours présente dans ce modèle mitigé, pas encore vérifié par VIF.
+- Pour le Logit, utiliser `features_logit` (156 features, `drop_first=True`) et `logit_mitigated.joblib` — **⚠️ à signaler à Max, confirmé par vérification directe de `src/mitigation.py`/`mitigated_features.json`** : `logit_mitigated.joblib` cumule DEUX problèmes de colinéarité non corrigés (entraîné sur l'ancien schéma) : (1) `shar1_1_A`/`shar1_1_B` toujours présentes (160 features, pas 156) — colinéarité compositionnelle du point 8 ; (2) `drop_first=True` jamais appliqué — les 6 colonnes de référence (`field_cd_A_1`, `career_c_A_1`, `goal_A_1`, etc.) sont toutes là, piège classique des variables muettes. Effet déjà visible : `career_c_B_1` (une colonne de référence piégée) apparaît dans le top 5 XPER-PNL de `logit_mitigated` — probable artefact d'encodage, pas un vrai signal, voir `docs/soutenance_notes.md` "Performance prédictive". Pas encore vérifié par VIF.
 
 **Rémi (stabilité)** :
 - Relancer `src/stability.py` avec `features_logit` pour le Logit (schéma dummies changé, `shar1_1_A`/`shar1_1_B` retirées + `drop_first=True`).
