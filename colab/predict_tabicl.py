@@ -25,25 +25,18 @@ A UPLOADER MANUELLEMENT dans Colab avant de lancer :
 
 Runtime Colab requis : GPU (le joblib est verrouille sur l'etat CUDA, meme pour predict_proba).
 
-IMPORTANT -- pyarrow epingle a la meme version que requirements.txt (19.0.0) AVANT tout import
-pandas : Colab installe par defaut une version de pyarrow plus recente qui ecrit un format de
-statistiques parquet (histogramme de repetition level) illisible par pyarrow 19 en local
-("Repetition level histogram size mismatch") -- deja rencontre une fois, a ne pas reproduire.
+PYARROW : plus besoin d'epingler de version ici (requirements.txt est passe a pyarrow==25.0.1
+en local suite a l'incident sur tabicl_mitigated_predictions.parquet -- ecrit par le pyarrow par
+defaut de Colab, illisible par l'ancien pyarrow 19 local : "Repetition level histogram size
+mismatch"). Un pyarrow recent en local lit sans probleme un parquet ecrit par un pyarrow plus
+ancien (compatibilite ascendante) -- seul le sens inverse posait probleme. Si jamais l'erreur
+revient malgre tout, mettre a jour pyarrow en local (`pip install -U pyarrow`) plutot que de
+repingler Colab a une vieille version.
 """
-!pip install -q "pyarrow==19.0.0"
-
 import json
 import numpy as np
 import pandas as pd
 import joblib
-import pyarrow
-
-assert pyarrow.__version__ == "19.0.0", (
-    f"pyarrow {pyarrow.__version__} chargé au lieu de 19.0.0 -- le pip install ci-dessus n'a "
-    "pas pu remplacer une version déjà importée en mémoire dans cette session. "
-    "Runtime > Redémarrer la session (pas juste relancer la cellule), PUIS relancer ce script "
-    "en entier depuis le début, sinon le fichier écrit sera de nouveau illisible en local."
-)
 
 data = pd.read_parquet("clean.parquet")
 feature_dict = json.load(open("features.json"))
