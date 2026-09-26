@@ -6,10 +6,18 @@ ATTENTION avant de lancer : XPER interroge le modele reel des CENTAINES/MILLIERS
 predict_tabicl.py. Sur logit (rapide, local), meme avec des parametres reduits, ca prend deja
 ~20s pour ~156-158 features. TabICL est un modele en in-context learning (un appel
 predict_proba = un forward pass sur tout le train comme contexte) -- chaque coalition risque
-d'etre beaucoup plus lente qu'un logit. Pas de garantie que ca termine dans un temps
-raisonnable, meme sur GPU Colab. Parametres ci-dessous deja reduits (N_coalition_sampled=300,
-sample_size=100) pour limiter le risque -- si c'est encore trop lent, interromps et on
-documente XPER-TabICL comme non calculable plutot que d'insister.
+d'etre beaucoup plus lente ET plus gourmande en memoire qu'un logit.
+
+CAUSE CONFIRMEE D'UN 1ER CRASH (OOM, kernel redemarre) : XPER paralllise le calcul des
+coalitions avec un ThreadPoolExecutor a max_workers=60, CODE EN DUR dans la librairie
+(XPER/compute/EM.py, pas configurable via l'API publique). Avec TabICL, chaque tache concurrente
+= un forward pass complet du transformer sur tout le train comme contexte -- jusqu'a 60
+d'entre eux simultanement peut saturer la RAM/VRAM disponible sur Colab, meme en GPU. Le seul
+levier disponible : N_coalition_sampled borne le nombre de taches total, donc le borner
+suffisamment bas (en dessous de 60) borne aussi le nombre de forward pass concurrents reels.
+Parametres ci-dessous deja reduits en consequence (N_coalition_sampled=15, sample_size=20) --
+si ca replante quand meme, documente XPER-TabICL comme non calculable (meme sur Colab GPU)
+plutot que d'insister davantage : c'est un point optionnel, pas bloquant pour la soutenance.
 
 Ce script calcule XPER-PNL en priorite (decomposition EXACTE de notre P&L reel, pas juste l'AUC
 -- voir derivation dans src/performance.py::compute_xper_pnl et docs/soutenance_notes.md
@@ -65,9 +73,10 @@ y_train = train["dec"].to_numpy()
 X_test = test[FEATURES].to_numpy()
 y_test = test["dec"].to_numpy()
 
-# Parametres reduits par rapport aux defauts (voir avertissement en tete de fichier) :
-SAMPLE_SIZE = 100
-N_COALITION_SAMPLED = 300
+# Parametres tres reduits pour eviter l'OOM (voir avertissement en tete de fichier -- max_workers=60
+# code en dur dans XPER, N_coalition_sampled bas = moins de forward pass TabICL concurrents) :
+SAMPLE_SIZE = 20
+N_COALITION_SAMPLED = 15
 
 # ---------------------------------------------------------------------------------------
 # XPER-PNL : decomposition EXACTE de notre P&L reel (calculate_pnl), pas juste un cout de
@@ -83,8 +92,9 @@ N_COALITION_SAMPLED = 300
 # ---------------------------------------------------------------------------------------
 print(f"\n=== XPER-PNL ({MODEL_FILE}) ===")
 print(f"sample_size={SAMPLE_SIZE}, N_coalition_sampled={N_COALITION_SAMPLED}")
-print("Si aucune sortie apres 10-15 minutes, interromps (Runtime > Interrompre l'execution) "
-      "et on documente XPER-TabICL comme non calculable plutot que d'attendre indefiniment.")
+print("Surveille la RAM (icone en haut a droite de Colab) pendant l'execution. Si elle sature "
+      "a nouveau ou si rien ne s'affiche apres 5-10 minutes, interromps (Runtime > Interrompre "
+      "l'execution) et on documente XPER-TabICL comme non calculable plutot que d'insister.")
 
 t0 = time.time()
 perf = ModelPerformance(X_train, y_train, X_test, y_test, model, sample_size=SAMPLE_SIZE, seed=42)
