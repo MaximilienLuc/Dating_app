@@ -1,0 +1,7 @@
+scenario,X,Y,model,optimal_threshold,pnl_test_at_optimal
+X=1/Y=1,1,1.0,logit,0.6,28.0
+X=1/Y=1,1,1.0,xgb,0.6,17.0
+X=1/Y=1,1,1.0,tabicl,0.45,55.0
+X=3/Y=0.3,3,0.3,logit,0.05,2029.2
+X=3/Y=0.3,3,0.3,xgb,0.05,2036.1
+X=3/Y=0.3,3,0.3,tabicl,0.25,1909.5

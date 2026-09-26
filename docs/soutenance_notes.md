@@ -116,21 +116,71 @@ colonnes redondantes.
   écartée par souci de calendrier (modèles gelés vendredi soir) ; le retrait simple reste
   défendable pour ce niveau de projet — phrase à avoir prête en Q&A si le sujet vient.
 
-## Économie / P&L
-- Matrice de coûts : profil montré + oui = +X, profil montré + non = −Y, match manqué = revenu
-  perdu
-- Seuil de décision à optimiser sur ce P&L plutôt que sur l'AUC seule, avec analyse de
-  sensibilité à X et Y — répond à l'exigence officielle du brief de performance "économique" en
-  plus de "statistique"
-- Simplification assumée : le P&L est calculé au niveau de la décision individuelle (dec), pas
-  au niveau du vrai match mutuel (match) qui nécessiterait de croiser deux décisions d'une paire
-  — limite documentée, pas cachée
-- Hypothèses de départ : X=2€ (recommandation qui aboutit à un oui), Y=0.5€ (recommandation
-  gâchée) — hypothèses narratives assumées, pas mesurées
-- Seuil de décision optimisé par grille sur GroupKFold (train), jamais sur le test final ; test
-  final touché une seule fois avec le seuil retenu
-- Analyse de sensibilité prévue sur 3 jeux d'hypothèses (X=2/Y=0.5, X=1/Y=1, X=3/Y=0.3) pour
-  vérifier la stabilité du modèle gagnant et du seuil optimal
+## Performance prédictive (statistique + économique) — FAIT, sur les 3 modèles
+
+Implémenté dans `src/performance.py` (branche `blanche-performance`), notebook narratif
+`notebooks/05_performance.ipynb`, résultats dans `reports/performance/`. Portée : PR-AUC,
+calibration, matrice de confusion, XPER (décomposition de l'AUC par feature), optimisation du
+seuil P&L, test de robustesse léger. **Pas de Brier score ni de log-loss** (hors cours ISAF,
+écarté volontairement).
+
+**Matrice de coûts** : profil montré + oui = +X, profil montré + non = −Y. Hypothèses dans
+`data/economic_assumptions.json` (jamais en dur dans le code) : **X=2€, Y=0.5€** (ratio 4:1) —
+hypothèses narratives assumées, pas mesurées, à affiner.
+
+**Simplification assumée** : le P&L est calculé au niveau de la décision individuelle (`dec`),
+pas du vrai match mutuel (`match`) qui nécessiterait de croiser deux décisions d'une paire —
+limite documentée dans `src/performance.py`, pas cachée. "Match manqué" → "occasion de oui
+manquée" au niveau individuel, pas de coût d'opportunité modélisé pour l'instant.
+
+**Seuil optimisé par grille (0.05-0.95) sur GroupKFold (train, 5 folds sur wave)**, appliqué une
+seule fois sur test :
+
+| Modèle | PR-AUC | Seuil optimal | P&L test @ seuil optimal | P&L test @ 0.5 | Top features XPER |
+|---|---|---|---|---|---|
+| Logit | 0.504 | 0.05 | 1042 € | 516.5 € | career_c_A_4, fit_score, exphappy_A, amb1_1_B, attr3_1_B |
+| XGBoost | 0.506 | 0.10 | 1051 € | 507.5 € | sports_B, career_c_B_16, field_cd_B_NA, goal_A_2, imprelig_A |
+| TabICL | 0.545 | 0.30 | 947 € | 498 € | non calculé en local (voir ci-dessous) |
+
+- Seuils optimaux nettement < 0.5 pour les 3 modèles — cohérent avec le ratio de coûts 4:1 qui
+  favorise la recommandation (un faux positif ne coûte que 0.5€, un vrai positif rapporte 2€).
+  Optimiser le seuil ~double le P&L test par rapport au seuil naïf 0.5.
+- **`income_A`/`income_B` n'apparaissent dans le top 10 XPER d'AUCUN des deux modèles**
+  (logit, xgb) — pas de lien direct performance/proxy fairness détecté sur cette lecture,
+  malgré le statut "borderline" de ces variables (à croiser avec l'audit TOST de Max).
+
+**XPER (Sinclair et al.)** : `pip install XPER`, `ModelPerformance(...).calculate_XPER_values(["AUC"])`.
+Nécessite le vrai objet modèle (appelé sur des centaines de coalitions de features masquées) —
+pas juste des prédictions figées. Calculé pour logit et XGBoost en local avec des paramètres
+réduits (`N_coalition_sampled=500` au lieu du défaut ~2360 à 156-158 features ; défaut testé et
+abandonné après >10 min sans terminer). **XGBoost a pris 12h31 au total** (dont l'écrasante
+majorité en veille système — la machine s'est mise en veille pendant l'exécution, ce qui gèle le
+process ; temps CPU réel ~2h14, soit ~15-20 min si la machine était restée éveillée. Utiliser
+`caffeinate -w <PID>` pour les prochains calculs longs, sur cette machine).
+**TabICL non calculable en local** (modèle non chargeable, cf. section TabICL) — tenté sur Colab
+via `colab/xper_tabicl.py` avec paramètres encore réduits (300 coalitions, échantillon 100) ;
+résultat non garanti dans un temps raisonnable, à documenter tel quel si non concluant.
+
+**Test de robustesse** (2 scénarios alternatifs, `data/economic_assumptions.json` réécrit
+temporairement puis restauré — jamais de valeur X/Y en dur) :
+
+| Scénario | Logit (seuil / P&L) | XGBoost (seuil / P&L) | TabICL (seuil / P&L) | Classement |
+|---|---|---|---|---|
+| X=2/Y=0.5 (base) | 0.05 / 1042€ | 0.10 / 1051€ | 0.30 / 947€ | xgb > logit > tabicl |
+| X=1/Y=1 (égal) | 0.60 / 28€ | 0.60 / 17€ | 0.45 / 55€ | **tabicl > logit > xgb** |
+| X=3/Y=0.3 (10:1) | 0.05 / 2029€ | 0.05 / 2036€ | 0.25 / 1910€ | xgb > logit > tabicl |
+
+- **Le classement des modèles n'est PAS stable** : à coûts égaux (X=1/Y=1), TabICL passe premier
+  — inversion complète par rapport au scénario de base et au scénario généreux. À ne pas
+  présenter comme "XGBoost est le meilleur modèle" sans préciser sous quelle hypothèse
+  économique.
+- Le seuil optimal, lui, est globalement stable en ordre de grandeur **sauf** au scénario à
+  coûts égaux, où il saute à ~0.5-0.6 pour tous les modèles (cohérent : sans asymétrie de coût,
+  optimal ≈ le seuil qui maximise l'accuracy plutôt qu'un seuil bas favorisant le recall).
+
+**Réservé au(x) finaliste(s)** (pas fait maintenant, décision explicite pour tenir le
+calendrier) : analyse de sensibilité complète (grille fine sur X/Y, pas 2 scénarios ponctuels),
+et XPER appliqué directement au P&L plutôt qu'à l'AUC seule.
 
 ## TabICL — diagnostic du crash CPU et décision
 - `TabICLClassifier.fit()` (tabicl==2.2.0) provoque un segfault natif (SIGSEGV) reproductible.
@@ -207,16 +257,21 @@ colonnes redondantes.
      d'équivalence [−10 pp, +10 pp]) et `reports/fairness/racial_exposure_rates.png` (taux d'exposition réels vs prédits).
 
 ## À faire (pas encore réalisé, à ne pas oublier)
-- [ ] Construire la matrice de coûts P&L et implémenter le calcul du profit total pour un seuil
-      donné, à partir des prédictions des 3 modèles
-- [ ] Optimiser le seuil de décision sur ce P&L en utilisant le GroupKFold sur train — jamais sur
-      le test final
-- [ ] Faire l'analyse de sensibilité à X et Y (le seuil optimal et la conclusion économique
-      changent-ils si les hypothèses de coût varient ?)
+- [x] Construire la matrice de coûts P&L et implémenter le calcul du profit total pour un seuil
+      donné, à partir des prédictions des 3 modèles — fait, `calculate_pnl()` dans
+      `src/performance.py`, voir "Performance prédictive"
+- [x] Optimiser le seuil de décision sur ce P&L en utilisant le GroupKFold sur train — jamais sur
+      le test final — fait, `optimize_threshold_groupkfold()`
+- [x] Faire l'analyse de sensibilité à X et Y (le seuil optimal et la conclusion économique
+      changent-ils si les hypothèses de coût varient ?) — fait (2 scénarios légers) : le
+      classement des modèles change (TabICL premier à X=1/Y=1), pas stable — voir "Performance
+      prédictive". Analyse complète (grille fine) réservée au(x) finaliste(s).
 - [ ] Tester income_A/income_B comme proxy sur d'autres variables démographiques (career_c,
       field_cd) avant de conclure qu'une seule mitigation suffit
 - [ ] Entraîner une variante des modèles avec income neutralisé/retiré pour comparer la
       disparité avant/après (2e passe de feature engineering fairness)
+- [ ] Tenter XPER sur TabICL sur Colab (`colab/xper_tabicl.py`, paramètres réduits, résultat non
+      garanti) — XPER logit/xgb fait en local, income_A/B absent du top 10 des deux
 - [x] Implémenter le retrait de shar1_1_A/B pour le logit uniquement — fait,
       `feature_dict["features_logit"]` dans `src/build_dataset.py`
 - [x] Vérifier/corriger l'encodage des dummies catégorielles (field_cd/career_c/goal),

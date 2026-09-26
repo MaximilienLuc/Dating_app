@@ -72,10 +72,15 @@ Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`
 
 **Comparaison à 3 modèles obtenue, à iso-features (158)** (AUC test split unique / GroupKFold 5 folds moyenne±écart-type) : logit 0.589 / 0.603±0.024, XGBoost 0.611 / 0.599±0.024, TabICL 0.632 / 0.591±0.038 (Colab, torch==2.11.0+cu128). Les 3 convergent vers ~0.59-0.60 en GroupKFold — plafond du problème, pas un effet d'algorithme. Voir tableau complet dans `docs/soutenance_notes.md`.
 
+**Fairness (Max) mergée dans `main`** : branche `fairness` (TOST, audit racial, `src/metrics.py`, `src/generate_fairness_reports.py`, `reports/fairness/`) mergée sans conflit avec `blanche`. Tag `avant-merge-blanquette-2026-09-25` posé sur `origin/main` avant ce merge (sécurité, sur GitHub).
+
+**Performance prédictive (statistique + économique) faite sur `blanche-performance`** (pas encore mergée) : `src/performance.py`, notebook `notebooks/05_performance.ipynb`, résultats dans `reports/performance/`. PR-AUC, calibration, matrice de confusion, XPER (income_A/B absent du top 10 des 2 modèles calculables), seuil P&L optimisé par GroupKFold, test de robustesse (2 scénarios — **le classement des 3 modèles n'est pas stable**, TabICL passe premier à coûts égaux X=1/Y=1). Détail complet dans `docs/soutenance_notes.md`. XPER-TabICL tenté sur Colab (`colab/xper_tabicl.py`), résultat non garanti. **Note opérationnelle** : le calcul XPER-XGBoost local a pris 12h31 à cause de la mise en veille du Mac (process gelé, pas planté) — utiliser `caffeinate -w <PID>` pour les prochains calculs longs sur cette machine.
+
 ### Prochaines étapes (Blanquette)
-1. Prévenir Max (logit à réinterpréter sur le nouveau schéma) et Rémi (stabilité à relancer — déjà su, mais schéma dummies aussi changé).
-2. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`).
-3. Implémenter le P&L (matrice de coûts X=2€/Y=0.5€, seuil optimisé sur GroupKFold train, sensibilité à X/Y — voir `docs/soutenance_notes.md`), y compris pour TabICL (nécessitera de repasser par Colab pour les prédictions).
+1. Prévenir Max (logit à réinterpréter sur le nouveau schéma `features_logit`) et Rémi (stabilité à relancer — déjà su, schéma dummies aussi changé).
+2. Merger `blanche-performance` dans `main` (vérifier conflits avec `remi/stability-tabicl` sur `docs/soutenance_notes.md`, comme pour les merges précédents).
+3. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`) — toujours pas fait.
+4. Tenter `colab/xper_tabicl.py` pour XPER-TabICL, si le temps le permet.
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.
