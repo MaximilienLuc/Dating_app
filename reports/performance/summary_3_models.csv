@@ -1,4 +1,0 @@
-model,pr_auc,optimal_threshold,pnl_test_optimal,pnl_test_default_05,accuracy_at_optimal,precision_at_optimal,recall_at_optimal,f1_at_optimal,top_xper_features
-logit,0.5042,0.05,1042.0,516.5,0.431,0.43,0.996,0.6,"career_c_A_4, fit_score, exphappy_A, amb1_1_B, attr3_1_B"
-xgb,0.5062,0.1,1051.0,507.5,0.436,0.432,1.0,0.603,"sports_B, career_c_B_16, field_cd_B_NA, goal_A_2, imprelig_A"
-tabicl,0.5445,0.3,947.0,498.0,0.537,0.477,0.833,0.607,n/a

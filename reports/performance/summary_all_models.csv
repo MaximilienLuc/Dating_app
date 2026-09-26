@@ -1,0 +1,6 @@
+model,pr_auc,optimal_threshold,pnl_test_optimal,pnl_test_default_05,accuracy_at_optimal,precision_at_optimal,recall_at_optimal,f1_at_optimal,top_xper_auc_features
+logit,0.5042,0.1,505.0,-89.0,0.443,0.433,0.972,0.599,"career_c_B_8, sinc3_1_A, theater_A, clubbing_A, date_A"
+xgb,0.5062,0.1,536.0,-96.0,0.436,0.432,1.0,0.603,"field_cd_B_NA, imprelig_A, theater_A, abs_age_diff, date_B"
+tabicl,0.5445,0.35,375.0,-97.0,0.566,0.496,0.746,0.596,n/a
+logit_mitigated,0.4922,0.05,527.0,-83.0,0.432,0.43,0.999,0.601,"art_A, career_c_B_2, yoga_A, career_c_A_1, field_cd_A_15"
+xgb_mitigated,0.5122,0.1,531.0,-163.0,0.433,0.431,1.0,0.602,"art_A, museums_A, career_c_B_2, field_cd_A_5, career_c_A_1"

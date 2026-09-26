@@ -1,5 +1,6 @@
 {
   "X": 2,
-  "Y": 0.5,
-  "note": "gain d'un oui recommand\u00e9 vs co\u00fbt d'un non recommand\u00e9, en euros. Hypoth\u00e8se de d\u00e9part (ratio 4:1), \u00e0 affiner : un profil recommand\u00e9 qui aboutit \u00e0 un 'oui' contribue \u00e0 une interaction positive (satisfaction, r\u00e9tention, conversion premium potentielle). Une recommandation 'g\u00e2ch\u00e9e' co\u00fbte beaucoup moins : l'utilisateur passe au profil suivant. Ratio qualitatif, non mesur\u00e9 -- recherche de valeurs plus r\u00e9alistes en cours."
+  "Y": 1,
+  "Z": 1,
+  "note": "Align\u00e9 sur les estimations de Max (src/mitigation.py : GAIN_TP=2, COST_FP=1, COST_FN=1) pour la coh\u00e9rence du projet -- version pr\u00e9c\u00e9dente : X=2, Y=0.5, pas de Z (occasions manqu\u00e9es non valoris\u00e9es). X = gain d'un TP (profil recommand\u00e9, dec=1). Y = co\u00fbt d'un FP (profil recommand\u00e9, dec=0). Z = co\u00fbt d'un FN (profil non recommand\u00e9, aurait \u00e9t\u00e9 dec=1 -- occasion manqu\u00e9e, d\u00e9sormais valoris\u00e9e sym\u00e9triquement au FP comme chez Max). TN = 0 (profil non recommand\u00e9, aurait \u00e9t\u00e9 dec=0 -- d\u00e9cision correcte, pas de co\u00fbt). Hypoth\u00e8ses toujours qualitatives, non mesur\u00e9es -- recherche de valeurs plus r\u00e9alistes en cours."
 }

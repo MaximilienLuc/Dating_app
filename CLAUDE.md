@@ -87,7 +87,11 @@ Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`
 
 **Performance prédictive (statistique + économique) faite sur `blanche-performance`** (pas encore mergée) : `src/performance.py`, notebook `notebooks/05_performance.ipynb`, résultats dans `reports/performance/`. PR-AUC, calibration, matrice de confusion, XPER (income_A/B absent du top 10 des 2 modèles calculables), seuil P&L optimisé par GroupKFold, test de robustesse (2 scénarios — **le classement des 3 modèles n'est pas stable**, TabICL passe premier à coûts égaux X=1/Y=1). XPER-TabICL tenté sur Colab (`colab/xper_tabicl.py`), résultat non garanti. **Note opérationnelle** : le calcul XPER-XGBoost local a pris 12h31 à cause de la mise en veille du Mac (process gelé, pas planté) — utiliser `caffeinate -w <PID>` pour les prochains calculs longs sur cette machine.
 
-**En cours** : réalignement des hypothèses économiques (X/Y initiaux = 2/0.5) sur celles de Max (`GAIN_TP=2, COST_FP=1, COST_FN=1` dans `src/mitigation.py`) pour la cohérence du projet — ajoute un coût aux occasions manquées (FN), absent de notre première version (TN reste à 0). Comparaison prévue : nos 3 modèles (logit/xgb/tabicl) vs les 2 modèles mitigés de Max (pas de TabICL mitigé) sur PR-AUC/P&L/seuil optimal, pour évaluer l'impact économique de la fairness. XPER avec la matrice CFP/CFN de Max (métrique `"MC"` de XPER) à tenter aussi. **Incompatibilité de schéma découverte et résolue** : les modèles mitigés de Max utilisent l'ancien encodage à 164 features (avant notre `drop_first`) — reconstruction exacte des 6 colonnes de référence manquantes (`field_cd_A_1` etc. = 1 − somme des autres catégories, encodage one-hot exhaustif) plutôt que d'attendre que Max relance sur le nouveau schéma.
+**Fait** : réalignement des hypothèses économiques sur celles de Max (`X=2, Y=1, Z=1` dans `data/economic_assumptions.json`, miroir de `GAIN_TP=2, COST_FP=1, COST_FN=1` dans `src/mitigation.py`) — ajoute un coût aux occasions manquées (Z/FN), absent de notre première version. Comparaison faite : nos 3 modèles de base (logit/xgb/tabicl) vs les 2 modèles mitigés de Max (logit_mitigated/xgb_mitigated, pas de TabICL mitigé pour l'instant) sur PR-AUC/P&L/seuil optimal — **impact économique de la mitigation faible et pas clairement défavorable** (logit +22 de P&L optimal après mitigation, xgb -5 ; à confirmer par un test de significativité, pas encore fait — voir "Rémi" ci-dessous). **Incompatibilité de schéma découverte et résolue** : les modèles mitigés de Max utilisent l'ancien encodage à 164 features (avant notre `drop_first`) — reconstruction exacte des 6 colonnes de référence manquantes (`field_cd_A_1` etc. = 1 − somme des autres catégories, encodage one-hot exhaustif) plutôt que d'attendre que Max relance sur le nouveau schéma.
+
+XPER étendu à 3 métriques (base + mitigés, logit/xgb) : `AUC` (perf statistique), `MC` (coût de classification brut de Max), et **`compute_xper_pnl` (nouveau)** — décomposition exacte de notre vrai P&L (pas juste le coût sans récompense TP de `MC`), dérivée algébriquement (`P&L = X·P − (X+Z)·FN − Y·FP`, la constante X·P n'affecte aucune feature). **Bug vérifié dans la librairie XPER** au passage : ses paramètres `CFP`/`CFN` sont inversés en interne par rapport à leur docstring (`CFP` pondère en réalité les FN, `CFN` les FP) — sans incidence tant que les deux coûts sont égaux (notre cas, Y=Z=1), documenté et corrigé dans `src/performance.py` pour ne pas piéger un futur usage à coûts asymétriques.
+
+**TabICL mitigé — script prêt, pas encore exécuté** : Max a poussé `colab/train_tabicl_mitigated.py`/`.ipynb` sur la branche `fairness` (pas encore mergée dans `main`) — copié dans notre arbre de travail sur `blanche-performance` mais jamais lancé (nécessite Colab + GPU T4). Une fois `tabicl_mitigated.joblib` + `tabicl_mitigated_predictions.parquet` obtenus, perf stat/éco (Part 1/3) possible en local comme pour TabICL de base ; XPER restera hors de portée en local (même verrouillage CUDA).
 
 ### Prochaines étapes
 
@@ -99,17 +103,20 @@ Le repo a été mergé avec la branche de stabilité de Remi (`src/stability.py`
 - Relancer `src/stability.py` avec `features_logit` pour le Logit (schéma dummies changé, `shar1_1_A`/`shar1_1_B` retirées + `drop_first=True`).
 - Idéalement : relancer aussi avec les modèles mitigés pour comparer stabilité avant/après mitigation.
 - TabICL : utiliser `data/tabicl_predictions.parquet` pour les prédictions (pas de `joblib.load`).
+- **Nouveau** : tester la stabilité du **seuil optimal P&L** maintenant que la matrice de coûts est fixée (X=2/Y=1/Z=1, `data/economic_assumptions.json`) — son propre README de stabilité notait que c'était différé faute de matrice de coûts définie, ce qui est fait maintenant.
+- **Nouveau** : un test de significativité formel (bootstrap apparié par session, même logique que `paired_auc_differences`) sur l'écart de P&L base vs mitigé (logit +22, xgb -5 en point estimé, pas encore de CI) — proposé à Rémi plutôt que fait par Blanquette, pour réutiliser directement son infrastructure de bootstrap. Message détaillé envoyé hors-repo.
 
 **Oli (app Streamlit)** :
 - Brancher `xgb_mitigated.joblib` (pas `xgb.joblib`) dans l'interface.
 - Pour TabICL, charger `data/tabicl_predictions.parquet` et faire une jointure sur `iid`/`pid` plutôt qu'appeler `predict_proba`.
 
 **Blanquette (moi, restant)** :
-1. P&L : implémenté une première fois (X=2/Y=0.5, sans coût FN) — en cours de réalignement sur les hypothèses de Max (X=2/Y=1/Z=1) et d'extension à la comparaison base vs mitigé (voir "En cours" ci-dessus).
-2. Merger `blanche-performance` dans `main` une fois cette extension terminée.
-3. Prévenir Max (logit à réinterpréter sur `features_logit` + vérifier la collinéarité shar1_1 dans son modèle mitigé) et Rémi (stabilité à relancer).
+1. P&L réaligné sur Max (X=2/Y=1/Z=1) et étendu à la comparaison base vs mitigé — fait (voir "Fait" ci-dessus). Reste : exécuter `colab/train_tabicl_mitigated.py` sur Colab pour avoir un 3e modèle mitigé.
+2. Merger `blanche-performance` dans `main` une fois `notebooks/05_performance.ipynb` resynchronisé avec les nouveaux résultats (actuellement narre encore l'ancienne version à 3 modèles).
+3. Prévenir Max (logit à réinterpréter sur `features_logit` + vérifier la collinéarité shar1_1 dans son modèle mitigé) et Rémi (stabilité à relancer + significativité base/mitigé + stabilité du seuil P&L) — message Rémi rédigé, à envoyer.
 4. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`) — toujours pas fait.
 5. Tenter `colab/xper_tabicl.py` pour XPER-TabICL, si le temps le permet.
+6. Nettoyer les anciens fichiers de sortie `reports/performance/` sous l'ancienne convention de nommage (`summary_3_models.csv`, `xper_values_logit.csv`, `xper_values_xgb.csv`), remplacés par `summary_all_models.csv` et `xper_{auc,mc,pnl}_*.csv`.
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.

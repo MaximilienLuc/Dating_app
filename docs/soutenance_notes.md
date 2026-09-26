@@ -116,71 +116,104 @@ colonnes redondantes.
   écartée par souci de calendrier (modèles gelés vendredi soir) ; le retrait simple reste
   défendable pour ce niveau de projet — phrase à avoir prête en Q&A si le sujet vient.
 
-## Performance prédictive (statistique + économique) — FAIT, sur les 3 modèles
+## Performance prédictive (statistique + économique) — FAIT, 3 modèles de base + 2 mitigés
 
 Implémenté dans `src/performance.py` (branche `blanche-performance`), notebook narratif
-`notebooks/05_performance.ipynb`, résultats dans `reports/performance/`. Portée : PR-AUC,
-calibration, matrice de confusion, XPER (décomposition de l'AUC par feature), optimisation du
+`notebooks/05_performance.ipynb` (à resynchroniser avec cette section — voir "À faire"),
+résultats dans `reports/performance/`. Portée : PR-AUC, calibration, matrice de confusion, XPER
+(décomposition de l'AUC, du coût de classification, et du P&L par feature), optimisation du
 seuil P&L, test de robustesse léger. **Pas de Brier score ni de log-loss** (hors cours ISAF,
 écarté volontairement).
 
-**Matrice de coûts** : profil montré + oui = +X, profil montré + non = −Y. Hypothèses dans
-`data/economic_assumptions.json` (jamais en dur dans le code) : **X=2€, Y=0.5€** (ratio 4:1) —
-hypothèses narratives assumées, pas mesurées, à affiner.
+**Matrice de coûts (réalignée sur Max pour la cohérence du projet)** : profil montré + oui = +X
+(TP), profil montré + non = −Y (FP), profil non montré alors que ça aurait été oui = −Z (FN,
+occasion manquée). Hypothèses dans `data/economic_assumptions.json` (jamais en dur dans le
+code) : **X=2, Y=1, Z=1** — alignées sur `src/mitigation.py` (`GAIN_TP=2, COST_FP=1,
+COST_FN=1`) de Max. Version précédente (X=2, Y=0.5, pas de Z) abandonnée : elle ne valorisait pas
+les occasions manquées, ce qui poussait les seuils optimaux vers des valeurs dégénérées
+(recommander presque tout le monde). Hypothèses toujours qualitatives, non mesurées.
 
 **Simplification assumée** : le P&L est calculé au niveau de la décision individuelle (`dec`),
 pas du vrai match mutuel (`match`) qui nécessiterait de croiser deux décisions d'une paire —
-limite documentée dans `src/performance.py`, pas cachée. "Match manqué" → "occasion de oui
-manquée" au niveau individuel, pas de coût d'opportunité modélisé pour l'instant.
+limite documentée dans `src/performance.py`, pas cachée.
+
+**Modèles mitigés (Max, `src/mitigation.py`)** : `logit_mitigated.joblib` / `xgb_mitigated.joblib`
+retirent 4 proxies raciaux identifiés par FPDP. Entraînés sur l'ancien schéma à 164/160 features
+(avant notre correction `drop_first=True`, cf. "Feature engineering") — les 6 colonnes de
+référence manquantes sont reconstruites **exactement** (encodage one-hot exhaustif, référence =
+1 − somme des autres catégories) par `add_legacy_reference_dummies()` dans `src/performance.py`,
+pas besoin d'attendre un réentraînement côté Max. Pas de version TabICL mitigée pour l'instant —
+script prêt (`colab/train_tabicl_mitigated.py` / `.ipynb`) mais pas encore exécuté (dépend de
+Max ou de nous, sur Colab GPU).
 
 **Seuil optimisé par grille (0.05-0.95) sur GroupKFold (train, 5 folds sur wave)**, appliqué une
 seule fois sur test :
 
-| Modèle | PR-AUC | Seuil optimal | P&L test @ seuil optimal | P&L test @ 0.5 | Top features XPER |
-|---|---|---|---|---|---|
-| Logit | 0.504 | 0.05 | 1042 € | 516.5 € | career_c_A_4, fit_score, exphappy_A, amb1_1_B, attr3_1_B |
-| XGBoost | 0.506 | 0.10 | 1051 € | 507.5 € | sports_B, career_c_B_16, field_cd_B_NA, goal_A_2, imprelig_A |
-| TabICL | 0.545 | 0.30 | 947 € | 498 € | non calculé en local (voir ci-dessous) |
+| Modèle | PR-AUC | Seuil optimal | P&L test @ seuil optimal | P&L test @ 0.5 |
+|---|---|---|---|---|
+| Logit | 0.504 | 0.10 | 505 | -89 |
+| XGBoost | 0.506 | 0.10 | 536 | -96 |
+| TabICL | 0.545 | 0.35 | 375 | -97 |
+| Logit mitigé | 0.492 | 0.05 | 527 | -83 |
+| XGBoost mitigé | 0.512 | 0.10 | 531 | -83 |
 
-- Seuils optimaux nettement < 0.5 pour les 3 modèles — cohérent avec le ratio de coûts 4:1 qui
-  favorise la recommandation (un faux positif ne coûte que 0.5€, un vrai positif rapporte 2€).
-  Optimiser le seuil ~double le P&L test par rapport au seuil naïf 0.5.
-- **`income_A`/`income_B` n'apparaissent dans le top 10 XPER d'AUCUN des deux modèles**
-  (logit, xgb) — pas de lien direct performance/proxy fairness détecté sur cette lecture,
-  malgré le statut "borderline" de ces variables (à croiser avec l'audit TOST de Max).
+**Fairness vs performance économique — base vs mitigé** : logit gagne +22 en P&L optimal après
+mitigation, xgb perd -5. Écart faible par rapport au bruit d'échantillonnage (single test split,
+~1800 lignes). **Premier constat pour l'argumentaire business : la mitigation ne dégrade pas la
+performance économique de façon visible, et l'améliore même légèrement pour le logit** — mais ce
+sont des points estimés, pas encore de test de significativité (bootstrap apparié par session,
+proposé à Rémi, cf. "Coordination équipe" et section stabilité).
 
-**XPER (Sinclair et al.)** : `pip install XPER`, `ModelPerformance(...).calculate_XPER_values(["AUC"])`.
+**XPER (Sinclair et al.)** : `pip install XPER`, `ModelPerformance(...).calculate_XPER_values(...)`.
 Nécessite le vrai objet modèle (appelé sur des centaines de coalitions de features masquées) —
-pas juste des prédictions figées. Calculé pour logit et XGBoost en local avec des paramètres
-réduits (`N_coalition_sampled=500` au lieu du défaut ~2360 à 156-158 features ; défaut testé et
-abandonné après >10 min sans terminer). **XGBoost a pris 12h31 au total** (dont l'écrasante
-majorité en veille système — la machine s'est mise en veille pendant l'exécution, ce qui gèle le
-process ; temps CPU réel ~2h14, soit ~15-20 min si la machine était restée éveillée. Utiliser
-`caffeinate -w <PID>` pour les prochains calculs longs, sur cette machine).
-**TabICL non calculable en local** (modèle non chargeable, cf. section TabICL) — tenté sur Colab
-via `colab/xper_tabicl.py` avec paramètres encore réduits (300 coalitions, échantillon 100) ;
-résultat non garanti dans un temps raisonnable, à documenter tel quel si non concluant.
+pas juste des prédictions figées. Calculé pour logit/xgb, base et mitigés, en local. Historique
+de calibration des paramètres : défaut de la librairie (~2360 coalitions pour nos 156-158
+features) abandonné après >10 min sans terminer ; `N_coalition_sampled=500, sample_size=200` a
+mis 9h17 (essentiellement veille système, ~2h14 de calcul réel) ; réduit à
+`N_coalition_sampled=150, sample_size=100` → **18.6s par modèle**, run complet des 4 modèles ×
+3 métriques en **~3-4 min total**. Utiliser `caffeinate -w <PID>` pour tout calcul long sur cette
+machine (leçon de l'incident 9h17). **TabICL non calculable en local** (modèle non chargeable) —
+tenté sur Colab via `colab/xper_tabicl.py`, résultat non garanti.
+
+Trois métriques XPER calculées, avec un **bug vérifié dans la librairie XPER** à connaître avant
+de réutiliser `CFP`/`CFN` : ces paramètres sont **inversés en interne** par rapport à leur
+docstring ("CFP: Cost of false positive") — vérifié empiriquement (modèle jouet, comparaison au
+coût de mauvaise classification attendu) sur `Optimisation.py` et `Performance.evaluate()` : le
+paramètre nommé `CFP` pondère en réalité les **faux négatifs**, `CFN` pondère les **faux
+positifs**. Sans incidence tant que les deux coûts sont égaux (notre cas partout jusqu'ici,
+Y=Z=1) ; documenté et corrigé dans `compute_xper`/`compute_xper_pnl` (`src/performance.py`) pour
+ne pas se faire piéger si des coûts asymétriques sont utilisés plus tard.
+
+1. **XPER-AUC** — décomposition de la performance statistique. `income_A`/`income_B`
+   n'apparaissent dans le top 10 d'aucun des 4 modèles (base ou mitigés) — pas de lien direct
+   performance/proxy fairness détecté sur cette lecture (à croiser avec l'audit TOST de Max).
+2. **XPER-MC** (`eval_metric="MC"`, coût de mauvaise classification brut de Max, CFP=Y, CFN=Z) —
+   décompose `Y·FP + Z·FN`, sans récompense de TP. Métrique native XPER la plus proche d'un
+   raisonnement économique, mais **pas exactement notre P&L**.
+3. **XPER-PNL** (`compute_xper_pnl`, nouveau) — décomposition **exacte** de notre vrai P&L
+   (`calculate_pnl`), pas une approximation. Dérivation : `P&L = X·TP − Y·FP − Z·FN`, et comme
+   `TP = P − FN` (P = nombre de positifs réels, constant, n'affecte aucune feature) :
+   `P&L = X·P − (X+Z)·FN − Y·FP`. Décomposer le P&L revient donc exactement à décomposer un coût
+   de classification avec coût de FN = (X+Z) et coût de FP = Y — implémenté en tenant compte du
+   bug CFP/CFN ci-dessus. Résultats (`reports/performance/xper_pnl_*.csv`) :
+
+   | Modèle | Top 5 features (XPER sur le P&L réel) |
+   |---|---|
+   | Logit | age_A, amb3_1_B, date_A, fun3_1_B, career_c_A_16 |
+   | XGBoost | age_A, imprace_A, intel3_1_B, field_cd_B_NA, field_cd_B_6 |
+   | Logit mitigé | field_cd_B_9, career_c_B_14, career_c_B_1, career_c_A_4, museums_B |
+   | XGBoost mitigé | field_cd_B_9, career_c_B_14, career_c_A_4, intel1_1_B, career_c_B_1 |
 
 **Test de robustesse** (2 scénarios alternatifs, `data/economic_assumptions.json` réécrit
-temporairement puis restauré — jamais de valeur X/Y en dur) :
+temporairement puis restauré — jamais de valeur X/Y/Z en dur), voir
+`reports/performance/robustness_test.csv` pour le détail complet des 5 modèles. Constat inchangé
+par rapport à la version précédente : **le classement des modèles n'est pas stable** selon les
+hypothèses de coût — à ne pas présenter comme "XGBoost est le meilleur modèle" sans préciser
+sous quelle hypothèse économique.
 
-| Scénario | Logit (seuil / P&L) | XGBoost (seuil / P&L) | TabICL (seuil / P&L) | Classement |
-|---|---|---|---|---|
-| X=2/Y=0.5 (base) | 0.05 / 1042€ | 0.10 / 1051€ | 0.30 / 947€ | xgb > logit > tabicl |
-| X=1/Y=1 (égal) | 0.60 / 28€ | 0.60 / 17€ | 0.45 / 55€ | **tabicl > logit > xgb** |
-| X=3/Y=0.3 (10:1) | 0.05 / 2029€ | 0.05 / 2036€ | 0.25 / 1910€ | xgb > logit > tabicl |
-
-- **Le classement des modèles n'est PAS stable** : à coûts égaux (X=1/Y=1), TabICL passe premier
-  — inversion complète par rapport au scénario de base et au scénario généreux. À ne pas
-  présenter comme "XGBoost est le meilleur modèle" sans préciser sous quelle hypothèse
-  économique.
-- Le seuil optimal, lui, est globalement stable en ordre de grandeur **sauf** au scénario à
-  coûts égaux, où il saute à ~0.5-0.6 pour tous les modèles (cohérent : sans asymétrie de coût,
-  optimal ≈ le seuil qui maximise l'accuracy plutôt qu'un seuil bas favorisant le recall).
-
-**Réservé au(x) finaliste(s)** (pas fait maintenant, décision explicite pour tenir le
-calendrier) : analyse de sensibilité complète (grille fine sur X/Y, pas 2 scénarios ponctuels),
-et XPER appliqué directement au P&L plutôt qu'à l'AUC seule.
+**Réservé au(x) finaliste(s)** (pas fait, décision explicite pour tenir le calendrier) : analyse
+de sensibilité complète (grille fine sur X/Y/Z, pas 2 scénarios ponctuels), et test de
+significativité formel (bootstrap apparié) sur l'écart de P&L base vs mitigé.
 
 ## TabICL — diagnostic du crash CPU et décision
 - `TabICLClassifier.fit()` (tabicl==2.2.0) provoque un segfault natif (SIGSEGV) reproductible.
@@ -397,8 +430,22 @@ l'évaluation s'appuie sur `data/tabicl_predictions.parquet` (inférence GPU Col
       disparité avant/après (2e passe de feature engineering fairness via FPDP) — fait
 - [ ] Prévenir Max : le logit a maintenant un features_logit distinct de features -- toute
       interprétation (SHAP/coefficients) du logit déjà commencée sur l'ancien schéma sera à
-      refaire
-- [ ] Lancer le P&L sur les 3 modèles (dépend de "Construire la matrice de coûts P&L" plus haut)
+      refaire ; et que `logit_mitigated.joblib` n'a pas retiré shar1_1_A/B (VIF à vérifier)
+- [x] Lancer le P&L sur les 3 modèles de base — fait, étendu aux 2 modèles mitigés de Max, voir
+      "Performance prédictive"
+- [x] Réaligner les hypothèses économiques (X/Y) sur celles de Max, ajouter un coût aux
+      occasions manquées (Z, absent de la 1ère version) — fait, `data/economic_assumptions.json`
+- [x] XPER appliqué directement au P&L (pas seulement à l'AUC) — fait, `compute_xper_pnl()`,
+      voir "Performance prédictive" (a nécessité de documenter et corriger un bug de la
+      librairie XPER sur CFP/CFN, inversés en interne par rapport à leur docstring)
+- [ ] Exécuter `colab/train_tabicl_mitigated.py`/`.ipynb` sur Colab GPU (prêt, pas encore
+      lancé) pour avoir un 3e modèle mitigé et compléter la comparaison base/mitigé
+- [ ] Test de significativité formel (bootstrap apparié par session, sur le modèle de
+      `reports/stability/`) sur l'écart de P&L base vs mitigé (+22 logit, -5 xgb sur point
+      estimé) — proposé à Rémi plutôt que fait par Blanquette, réutilise son infrastructure de
+      bootstrap et sa matrice de coûts nouvellement disponible
+- [ ] Mettre à jour `notebooks/05_performance.ipynb` avec les résultats à 5 modèles et les 3
+      métriques XPER (actuellement narre encore l'ancienne version à 3 modèles/X=2,Y=0.5)
 
 
 ## Choix XGBoost vs Random Forest
