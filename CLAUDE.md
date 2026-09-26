@@ -111,13 +111,13 @@ XPER étendu à 3 métriques (base + mitigés, logit/xgb) : `AUC` (perf statisti
 - Pour TabICL, charger `data/tabicl_predictions.parquet` et faire une jointure sur `iid`/`pid` plutôt qu'appeler `predict_proba`.
 - **Nouveau** : `logit_mitigated.joblib` disponible aussi (mêmes réserves que pour Max plus haut sur sa colinéarité non corrigée — utilisable pour la proba, moins pour des coefficients affichés tels quels). `tabicl_mitigated` disponible en prédictions figées : `data/tabicl_mitigated_predictions.parquet`, colonne `tabicl_mit_proba`, même jointure `iid`/`pid`/`wave` que TabICL de base — jamais de `joblib.load('models/tabicl_mitigated.joblib')` en local (même verrouillage CUDA).
 
-**Blanquette (moi, restant)** :
-1. P&L réaligné sur Max (X=2/Y=1/Z=1) et étendu à la comparaison base vs mitigé, 3 paires (logit/xgb/tabicl) — fait (voir "Fait" ci-dessus). Sur les 3 paires, aucune dégradation économique franche de la mitigation, 2 l'améliorent même légèrement (logit +22, tabicl +16 ; xgb -5) — bon signal pour l'argumentaire business, pas encore de test de significativité (proposé à Rémi).
-2. Merger `blanche-performance` dans `main` une fois `notebooks/05_performance.ipynb` resynchronisé avec les nouveaux résultats (actuellement narre encore l'ancienne version à 3 modèles).
-3. Prévenir Max (logit à réinterpréter sur `features_logit` + vérifier la collinéarité shar1_1 dans son modèle mitigé) et Rémi (stabilité à relancer + significativité base/mitigé + stabilité du seuil P&L) — message Rémi rédigé, à envoyer.
-4. Créer `src/logit_model.py`, `src/xgb_model.py` avec docstring standardisé (même format que `src/tabicl_model.py`) — toujours pas fait.
-5. ~~Tenter `colab/xper_tabicl.py` pour XPER-TabICL~~ — fait, 3 tentatives, **conclu non exploitable** (2 crashes mémoire OOM, puis résultat statistiquement dégénéré à N_coalition_sampled=3 : 8 valeurs uniques sur 158 features). Acté à ne pas retenter, voir `docs/soutenance_notes.md`.
-6. Nettoyer les anciens fichiers de sortie `reports/performance/` sous l'ancienne convention de nommage (`summary_3_models.csv`, `xper_values_logit.csv`, `xper_values_xgb.csv`), remplacés par `summary_all_models.csv` et `xper_{auc,mc,pnl}_*.csv`.
+**Blanquette (moi, scope données/EDA/3 modèles/performance et P&L) — clos** :
+1. P&L réaligné sur Max (X=2/Y=1/Z=1) et étendu à la comparaison base vs mitigé, 3 paires (logit/xgb/tabicl) — fait. Aucune dégradation économique franche de la mitigation, 2 paires l'améliorent même légèrement (logit +22, tabicl +16 ; xgb -5) — bon signal pour l'argumentaire business, test de significativité formel proposé à Rémi (pas fait par nous, décision explicite).
+2. `blanche-performance` mergée dans `main` (fast-forward, les deux branches sont synchronisées), `notebooks/05_performance.ipynb` resynchronisé à 6 modèles et réexécuté sans erreur — fait.
+3. Message groupé rédigé pour l'équipe (Max : schéma logit + collinéarité `logit_mitigated` ; Rémi : significativité base/mitigé + stabilité du seuil P&L ; Alex : état des lieux perf éco pour interprétabilité/app) — contenu prêt, à Blanquette de l'envoyer sur le groupe.
+4. `src/logit_model.py`/`src/xgb_model.py` (docstring standardisé façon `src/tabicl_model.py`) — **dette technique assumée, pas faite** : hyperparamètres logit/xgb dupliqués dans `01_data_models_v0.py`, `src/stability.py` et `src/performance.py` (documenté en tête de ces 3 fichiers). Décision explicite de ne pas refactorer si près du rendu — reporté après le gel si quelqu'un a le temps, pas bloquant.
+5. XPER-TabICL tenté (3 fois sur Colab) — **conclu non exploitable**, acté à ne pas retenter (2 crashes OOM puis résultat statistiquement dégénéré à N_coalition_sampled=3, voir `docs/soutenance_notes.md`).
+6. Anciens fichiers de sortie `reports/performance/` sous l'ancienne convention (`summary_3_models.csv`, `xper_values_logit.csv`, `xper_values_xgb.csv`) supprimés, remplacés par `summary_all_models.csv` et `xper_{auc,mc,pnl}_*.csv` — fait.
 
 ### Planning
 - Jeudi/vendredi : analyses par bloc.
