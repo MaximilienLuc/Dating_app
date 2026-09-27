@@ -1,0 +1,164 @@
+{
+  "shap_share_by_side": {
+    "A (décideur)": 0.5260000228881836,
+    "B (candidat)": 0.4359999895095825,
+    "Couple": 0.03799999877810478
+  },
+  "shap_share_by_category": {
+    "Ce que je cherche": 0.16099999845027924,
+    "Comment je me note": 0.08500000089406967,
+    "Démographie / habitudes": 0.210999995470047,
+    "Intérêts": 0.40700000524520874,
+    "Variables de couple": 0.03799999877810478,
+    "Études / carrière / objectif": 0.09700000286102295
+  },
+  "borne_selectivite_popularite": {
+    "auc_selectivite_A": 0.763,
+    "auc_popularite_B": 0.744,
+    "auc_A_plus_B": 0.839
+  },
+  "exemples_locaux": {
+    "oui_bien_predit": {
+      "proba_base": 0.417,
+      "proba_couple": 0.8360000252723694,
+      "description": "A : femme, 28 ans · B : homme, 26 ans · origine de B : blanc·he · décision réelle : OUI",
+      "top_contributions": {
+        "A : cherche : intérêts communs": 0.887,
+        "A : fréquence de dates (1=souvent)": 0.367,
+        "A : objectif = relation sérieuse": 0.28,
+        "B : cherche : intérêts communs": 0.153,
+        "A : importance même origine": 0.137,
+        "B : revenu médian du quartier": 0.115,
+        "B : aime la randonnée": 0.113,
+        "A : aime sortir en boîte": 0.109
+      }
+    },
+    "non_bien_predit": {
+      "proba_base": 0.417,
+      "proba_couple": 0.09000000357627869,
+      "description": "A : femme, 26 ans · B : homme, 42 ans · origine de B : blanc·he · décision réelle : NON",
+      "top_contributions": {
+        "B : aime le sport": -0.315,
+        "A : importance même origine": -0.252,
+        "A : se note : intelligence": 0.23,
+        "B : aime les restaurants": -0.193,
+        "A : aime le cinéma": 0.173,
+        "A : aime la muscu": -0.172,
+        "A : aime les jeux vidéo": -0.153,
+        "B : âge": -0.149
+      }
+    }
+  },
+  "shap_vs_lime": {
+    "feature_agreement": 0.316,
+    "rank1_agreement": 0.06,
+    "sign_agreement": 1.0,
+    "lime_r2_exemples": {
+      "oui_bien_predit": 0.045,
+      "non_bien_predit": 0.049
+    },
+    "n_couples": 100,
+    "k": 5
+  },
+  "pdp_amplitude_pp": {
+    "A : importance même origine": 7.7,
+    "Couple : écart d'âge absolu": 6.6,
+    "Couple : intérêts en commun": 4.3,
+    "A : optimisme sur la soirée": 5.5,
+    "A : âge": 5.1,
+    "B : aime le sport": 8.8
+  },
+  "permutation": {
+    "n_variables_utiles_2sd": 35,
+    "n_variables": 160,
+    "top5": [
+      "A : optimisme sur la soirée",
+      "A : importance même origine",
+      "B : cherche : intérêts communs",
+      "A : aime les jeux vidéo",
+      "B : se note : humour"
+    ]
+  },
+  "logit": {
+    "auc_test": 0.578,
+    "n_variables": 152,
+    "n_significatives_95": 22
+  },
+  "tabicl_surrogate": {
+    "arbre_profondeur_3": {
+      "r2_in_sample": 0.328,
+      "r2_cv_by_session": -0.0,
+      "spearman_cv": 0.273,
+      "auc_surrogate_vs_dec": 0.573,
+      "auc_tabicl_vs_dec": 0.626
+    },
+    "xgb_profondeur_2": {
+      "r2_cv_by_session": 0.342,
+      "spearman_cv": 0.559
+    },
+    "top5_xgb_surrogate": [
+      "A : importance même origine",
+      "A : aime le yoga",
+      "A : aime les jeux vidéo",
+      "B : cherche : intérêts communs",
+      "B : aime la muscu"
+    ]
+  },
+  "accord_methodes_spearman": {
+    "XGB · SHAP": {
+      "XGB · SHAP": 1.0,
+      "XGB · permutation (AUC)": 0.21,
+      "Logit · |coef| std.": 0.49,
+      "TabICL · surrogate SHAP": 0.81
+    },
+    "XGB · permutation (AUC)": {
+      "XGB · SHAP": 0.21,
+      "XGB · permutation (AUC)": 1.0,
+      "Logit · |coef| std.": 0.17,
+      "TabICL · surrogate SHAP": 0.28
+    },
+    "Logit · |coef| std.": {
+      "XGB · SHAP": 0.49,
+      "XGB · permutation (AUC)": 0.17,
+      "Logit · |coef| std.": 1.0,
+      "TabICL · surrogate SHAP": 0.27
+    },
+    "TabICL · surrogate SHAP": {
+      "XGB · SHAP": 0.81,
+      "XGB · permutation (AUC)": 0.28,
+      "Logit · |coef| std.": 0.27,
+      "TabICL · surrogate SHAP": 1.0
+    }
+  },
+  "variables_consensus": [
+    "A : importance même origine",
+    "A : aime sortir en boîte",
+    "A : optimisme sur la soirée",
+    "A : aime les jeux vidéo",
+    "A : aime le cinéma",
+    "A : aime le yoga"
+  ],
+  "genre": {
+    "auc_devine_genre_B": 0.815,
+    "auc_devine_genre_A": 0.814,
+    "taux_recommandation_top50pct": {
+      "proba_logit_mitigated": {
+        "femmes": 0.531,
+        "hommes": 0.469
+      },
+      "proba_xgb_mitigated": {
+        "femmes": 0.583,
+        "hommes": 0.417
+      },
+      "proba_tabicl_mitigated": {
+        "femmes": 0.577,
+        "hommes": 0.423
+      },
+      "oui_reels": {
+        "femmes": 0.55,
+        "hommes": 0.308
+      }
+    }
+  },
+  "modele_explique": "xgb_mitigated (+ logit propre, + TabICL mitigé via surrogate)"
+}

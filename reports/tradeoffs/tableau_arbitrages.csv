@@ -1,0 +1,11 @@
+,"AUC test
+(IC 95 %)","Gain top 3
+vs hasard",Explicabilité,"Stabilité
+(top 3 qui change)","Fairness origine
+(asiat. · latinos · noirs)",Déploiement
+Logit,"0,59 [0,57 ; 0,60]","+7,7 pts [3,9 ; 11,5]","Native : coefficients + IC, lisible",31 %,"0,48 · 1,95 · 0,35","CPU, léger"
+XGBoost,"0,61 [0,54 ; 0,62]","+4,9 pts [1,2 ; 8,5]","SHAP exact, affichable dans l'app",41 %,"0,94 · 1,75 · 0,69","CPU, léger"
+TabICL,"0,63 [0,57 ; 0,66]","+2,9 pts [-0,1 ; 5,8]","Surrogate seulement (fidélité R² 0,34)",Non mesurable (GPU),"0,62 · 1,36 · 0,55",GPU requis
+Logit mitigé,"0,58 [0,56 ; 0,60]","+6,7 pts [2,2 ; 9,1]","Native : coefficients + IC, lisible",31 %,"0,56 · 1,62 · 0,55","CPU, léger"
+XGBoost mitigé,"0,61 [0,53 ; 0,65]","+5,4 pts [-1,2 ; 9,4]","SHAP exact, affichable dans l'app",42 %,"0,84 · 1,35 · 1,01","CPU, léger"
+TabICL mitigé,"0,63 [0,55 ; 0,65]","+5,9 pts [3,5 ; 10,6]","Surrogate seulement (fidélité R² 0,34)",Non mesurable (GPU),"0,76 · 0,90 · 0,58",GPU requis

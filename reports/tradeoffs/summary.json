@@ -1,0 +1,129 @@
+{
+  "auc": {
+    "Logit": {
+      "auc": 0.589,
+      "ic_bas": 0.574,
+      "ic_haut": 0.602
+    },
+    "XGBoost": {
+      "auc": 0.611,
+      "ic_bas": 0.536,
+      "ic_haut": 0.624
+    },
+    "TabICL": {
+      "auc": 0.632,
+      "ic_bas": 0.575,
+      "ic_haut": 0.657
+    },
+    "Logit mitigé": {
+      "auc": 0.58,
+      "ic_bas": 0.555,
+      "ic_haut": 0.6
+    },
+    "XGBoost mitigé": {
+      "auc": 0.612,
+      "ic_bas": 0.525,
+      "ic_haut": 0.655
+    },
+    "TabICL mitigé": {
+      "auc": 0.626,
+      "ic_bas": 0.552,
+      "ic_haut": 0.652
+    }
+  },
+  "fairness_ratios": {
+    "Décisions réelles (oui)": {
+      "Asiatiques": 0.804,
+      "Latinos": 1.147,
+      "Noirs": 1.051,
+      "distorsion (0 = parité)": 0.135,
+      "écarts significatifs": 0
+    },
+    "Logit": {
+      "Asiatiques": 0.482,
+      "Latinos": 1.953,
+      "Noirs": 0.354,
+      "distorsion (0 = parité)": 0.813,
+      "écarts significatifs": 2
+    },
+    "Logit mitigé": {
+      "Asiatiques": 0.558,
+      "Latinos": 1.617,
+      "Noirs": 0.548,
+      "distorsion (0 = parité)": 0.555,
+      "écarts significatifs": 0
+    },
+    "TabICL": {
+      "Asiatiques": 0.621,
+      "Latinos": 1.364,
+      "Noirs": 0.547,
+      "distorsion (0 = parité)": 0.463,
+      "écarts significatifs": 1
+    },
+    "TabICL mitigé": {
+      "Asiatiques": 0.763,
+      "Latinos": 0.902,
+      "Noirs": 0.582,
+      "distorsion (0 = parité)": 0.305,
+      "écarts significatifs": 0
+    },
+    "XGBoost": {
+      "Asiatiques": 0.941,
+      "Latinos": 1.748,
+      "Noirs": 0.69,
+      "distorsion (0 = parité)": 0.33,
+      "écarts significatifs": 0
+    },
+    "XGBoost mitigé": {
+      "Asiatiques": 0.838,
+      "Latinos": 1.352,
+      "Noirs": 1.008,
+      "distorsion (0 = parité)": 0.162,
+      "écarts significatifs": 0
+    }
+  },
+  "genre_ratio_top3": {
+    "Décisions réelles (oui)": 1.786,
+    "Logit": 0.985,
+    "XGBoost": 0.985,
+    "TabICL": 0.985,
+    "Logit mitigé": 0.985,
+    "XGBoost mitigé": 0.985,
+    "TabICL mitigé": 0.985
+  },
+  "stabilite": {
+    "logit": {
+      "auc_p05": 0.546,
+      "auc_p95": 0.606,
+      "auc_ecart_p95_p05": 0.06,
+      "bascule_seuil_05": 0.162,
+      "top3_change": 0.31,
+      "correlation_scores": 0.821
+    },
+    "logit_mitigated": {
+      "auc_p05": 0.535,
+      "auc_p95": 0.602,
+      "auc_ecart_p95_p05": 0.067,
+      "bascule_seuil_05": 0.163,
+      "top3_change": 0.307,
+      "correlation_scores": 0.827
+    },
+    "xgb": {
+      "auc_p05": 0.574,
+      "auc_p95": 0.638,
+      "auc_ecart_p95_p05": 0.064,
+      "bascule_seuil_05": 0.214,
+      "top3_change": 0.41,
+      "correlation_scores": 0.716
+    },
+    "xgb_mitigated": {
+      "auc_p05": 0.567,
+      "auc_p95": 0.634,
+      "auc_ecart_p95_p05": 0.067,
+      "bascule_seuil_05": 0.221,
+      "top3_change": 0.421,
+      "correlation_scores": 0.694
+    }
+  },
+  "recommandation": "XGBoost mitigé, mode top k par utilisateur, avec stabilisation, suivi de fairness et A/B test des coûts"
+}

@@ -1,0 +1,16 @@
+feature,label,spearman_value_vs_shap,effet
+imprace_A,A : importance même origine,-0.92,↓ moins de oui
+gaming_A,A : aime les jeux vidéo,0.92,↑ plus de oui
+movies_A,A : aime le cinéma,-0.93,↓ moins de oui
+sports_B,B : aime le sport,0.91,↑ plus de oui
+exphappy_A,A : optimisme sur la soirée,0.84,↑ plus de oui
+income_B,B : revenu médian du quartier,0.24,non monotone
+age_A,A : âge,-0.74,↓ moins de oui
+sinc1_1_A,A : cherche : sincérité,0.84,↑ plus de oui
+shar1_1_B,B : cherche : intérêts communs,-0.94,↓ moins de oui
+tv_B,B : aime la TV,-0.71,↓ moins de oui
+shar1_1_A,A : cherche : intérêts communs,0.14,non monotone
+fun1_1_B,B : cherche : humour,0.85,↑ plus de oui
+yoga_A,A : aime le yoga,0.84,↑ plus de oui
+intel3_1_A,A : se note : intelligence,0.92,↑ plus de oui
+clubbing_A,A : aime sortir en boîte,0.68,↑ plus de oui

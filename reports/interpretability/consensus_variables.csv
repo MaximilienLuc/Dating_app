@@ -1,0 +1,7 @@
+feature,label,n_methods_topk,XGB · SHAP,XGB · permutation (AUC),Logit · |coef| std.,TabICL · surrogate SHAP
+imprace_A,A : importance même origine,4,1,2,14,1
+clubbing_A,A : aime sortir en boîte,3,13,13,41,14
+exphappy_A,A : optimisme sur la soirée,3,5,1,16,15
+gaming_A,A : aime les jeux vidéo,3,2,3,27,3
+movies_A,A : aime le cinéma,3,3,8,2,61
+yoga_A,A : aime le yoga,3,11,36,9,2
