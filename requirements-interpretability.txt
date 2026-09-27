@@ -1,0 +1,6 @@
+-r requirements.txt
+pyarrow>=25.0.1
+shap==0.51.0
+lime==0.2.0.1
+matplotlib
+jupyter
