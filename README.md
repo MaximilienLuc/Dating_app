@@ -1,22 +1,214 @@
-# match_HEC
-Dating app for HEC students
+# 💘 HEC Match — Trustworthy AI for a Dating App
 
-## Installation
+> **Can an algorithm recommend romantic matches fairly?**
+> A scoring system for a fictional dating app, evaluated through the lens of
+> *performance*, *interpretability*, *stability*, and *fairness*.
 
-Créer un venv et installer les dépendances : `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+<p align="center">
+  <img src="reports/fairness/bias_decomposition.png" width="700" alt="Bias decomposition: societal vs algorithmic"/>
+</p>
 
-Le dataset brut (`data/Speed Dating Data.csv` et son dictionnaire `data/Speed Dating Data Key.doc`) n'est pas versionné (voir `.gitignore`) : à télécharger depuis Kaggle (« Speed Dating Experiment ») et à placer manuellement dans `data/`.
+## 📋 Overview
 
-## TabICL (modèle 3/3) — nécessite Colab
+**HEC Match** is a group project for the MSc DSAIB course *"Interpretability, Stability, and Algorithmic Fairness"* (Prof. Christophe Pérignon & Dr. Sébastien Saurin, HEC Paris, September 2026).
 
-`TabICLClassifier.fit()` (`tabicl==2.2.0`) provoque un segfault natif (SIGSEGV) reproductible sur le chemin CPU de la librairie — confirmé à la fois sur Mac Apple Silicon (M4, torch 2.14.0) et sur Colab en CPU (x86_64). **Ce n'est donc pas un bug spécifique à Apple Silicon** : le chemin CPU de `tabicl` est cassé partout où on l'a testé à ce jour. Seul l'entraînement avec `device="cuda"` sur Colab fonctionne.
+We built a recommendation engine for a fictional dating app using the [Speed Dating Experiment](https://www.kaggle.com/datasets/annavictoria/speed-dating-experiment) dataset (Fisman & Iyengar, Columbia Business School, 2002–2004). The dataset contains 8,378 observations from 21 speed-dating sessions where participants rated each other across multiple dimensions.
 
-Le `models/tabicl.joblib` qui en résulte est verrouillé sur l'état CUDA (`torch==2.11.0+cu128` lors du test) : le charger sur une machine sans CUDA plante aussi, dès `joblib.load()`, avant même `predict_proba()`. **`models/tabicl.joblib` n'est donc pas portable** — utilisable uniquement sur Colab (ou toute machine avec CUDA). Décision d'équipe : accepté, l'usage de TabICL est ponctuel (pas de réentraînement fréquent), pas besoin qu'il tourne ailleurs pour l'instant.
+**Target variable:** `dec` — whether participant A wants to see participant B again (~40% positive rate).
 
-Pour (ré)entraîner TabICL : coller `colab/train_tabicl.py` dans une cellule Colab avec un runtime GPU activé (Modifier > Paramètres du notebook > GPU), après avoir uploadé `data/clean.parquet`, `data/features.json` et `data/split.json`. Voir `docs/soutenance_notes.md` pour le détail du diagnostic (recherche binaire sur les colonnes, comparaison données réelles vs synthétiques, etc.).
+**Core constraint:** Only pre-date variables are used as features (questionnaire responses, demographics, declared preferences). Post-date ratings are excluded to avoid information leakage — resulting in a modest but honest AUC ceiling of ~0.60.
 
-## Stability (Rémi)
+## 🔬 Key Findings
 
-[Notebook with results](04_stability.executed.ipynb) · [Notebook source](04_stability.ipynb) · [Method and app integration](reports/stability/README.md)
+| Dimension | Insight |
+|---|---|
+| **Performance** | All 3 models converge to the same AUC plateau (~0.59–0.60 GroupKFold), confirming the problem's intrinsic difficulty — not a modeling failure |
+| **Interpretability** | XGBoost top features: `int_corr` (shared interest correlation), `attr3_1` (self-assessed attractiveness), `fun1_1` (partner's sense of humor priority) |
+| **Stability** | 16.7% (Logit) and 21.4% (XGBoost) of decisions flip across bootstrap retrainings at threshold 0.50 |
+| **Fairness** | Models reproduce human racial preferences from the data — Asian candidates are under-exposed by +8.6 pp (societal bias). XGBoost adds ≤ 4 pp of algorithmic bias; Logit amplifies Latino discrimination by −12.5 pp |
+| **Mitigation** | Removing 4 FPDP-identified racial proxies reduces TabICL's algorithmic bias on the "Other" group from +9.1 pp to +3.3 pp with negligible AUC loss |
 
-Session-level bootstrap: logit/XGBoost training sensitivity and three-model test uncertainty using frozen TabICL predictions. Reproduce the analysis with `python -m src.stability`; see `requirements-stability.txt` for dependencies.
+## 🏗️ Repository Structure
+
+```
+match_HEC/
+├── app/                          # Interactive web app (static HTML, no server)
+│   ├── index.html                # Self-contained app — open in browser
+│   ├── score.js                  # Client-side logit/XGBoost scoring
+│   └── build.py                  # Regeneration script
+│
+├── colab/                        # Google Colab scripts (GPU required)
+│   ├── train_tabicl.py           # TabICL baseline training
+│   ├── train_tabicl_mitigated.py # TabICL mitigated training (154 features)
+│   ├── predict_tabicl.py         # Batch inference
+│   └── xper_tabicl.py            # XPER decomposition on Colab
+│
+├── data/
+│   ├── clean.parquet             # Engineered dataset (generated by build_dataset)
+│   ├── features.json             # Feature contract (158 XGB / 156 Logit)
+│   ├── split.json                # Train/test wave split
+│   ├── tabicl_predictions.parquet          # Pre-computed TabICL probabilities
+│   ├── tabicl_mitigated_predictions.parquet
+│   ├── mitigated_features.json   # 154-feature contract (4 proxies removed)
+│   └── economic_assumptions.json # P&L cost matrix (X=2€, Y=0.5€, Z=0€)
+│
+├── docs/
+│   ├── soutenance_notes.md       # Detailed defense notes (FR)
+│   └── data_dictionary.md        # Variable documentation
+│
+├── models/
+│   ├── xgb.joblib                # XGBoost baseline
+│   ├── logit.joblib              # Logistic regression baseline
+│   ├── xgb_mitigated.joblib      # XGBoost without racial proxies ⭐
+│   ├── logit_mitigated.joblib    # Logit without racial proxies
+│   ├── tabicl.joblib             # TabICL (CUDA-only, not portable)
+│   └── tabicl_mitigated.joblib   # TabICL mitigated (CUDA-only)
+│
+├── notebooks/
+│   ├── 00_eda_cleaning.ipynb     # EDA & data cleaning
+│   ├── 02_interpretability.ipynb # SHAP, LIME, PDP/ICE, XPER
+│   ├── 05_performance.ipynb      # Model comparison & calibration
+│   ├── 06_economics.ipynb        # P&L analysis & threshold optimization
+│   └── 07_tradeoffs.ipynb        # Multi-criteria trade-off synthesis
+│
+├── reports/
+│   ├── economics/                # P&L curves, sensitivity analysis
+│   ├── fairness/                 # TOST intervals, bias decomposition, mitigation
+│   ├── interpretability/         # SHAP beeswarm, odds ratios, surrogate trees
+│   ├── performance/              # Calibration, threshold grids, XPER
+│   ├── stability/                # Bootstrap distributions, decision flips
+│   └── tradeoffs/                # Final arbitrage tables
+│
+├── src/
+│   ├── build_dataset.py          # Feature engineering pipeline
+│   ├── metrics.py                # TOST, shared fairness metrics
+│   ├── mitigation.py             # FPDP proxy identification & removal
+│   ├── generate_fairness_reports.py
+│   ├── fairness_at_optimal_threshold.py
+│   ├── fairness_bias_decomposition.py
+│   ├── interpretability.py       # SHAP, LIME, PDP, XPER, surrogate
+│   ├── performance.py            # All-model evaluation & calibration
+│   ├── economics.py              # P&L simulation & top-K strategies
+│   ├── stability.py              # Bootstrap retraining & decision flip analysis
+│   ├── tradeoffs.py              # Multi-criteria comparison table
+│   ├── tabicl_model.py           # TabICL wrapper
+│   └── app_export.py             # Export data for the web app
+│
+├── tests/
+│   └── test_stability.py
+│
+├── 01_data_models_v0.py          # End-to-end baseline script
+├── 04_stability.ipynb            # Stability notebook (root level)
+├── requirements.txt              # Core dependencies
+├── requirements-stability.txt    # Stability-specific dependencies
+└── requirements-interpretability.txt
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- The raw dataset from Kaggle ([Speed Dating Experiment](https://www.kaggle.com/datasets/annavictoria/speed-dating-experiment))
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/MaximilienLuc/match_HEC.git
+cd match_HEC
+
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Data Setup
+
+Download `Speed Dating Data.csv` and `Speed Dating Data Key.doc` from Kaggle and place them in `data/`.
+
+### Run the Pipeline
+
+```bash
+# 1. Build the clean dataset
+python -m src.build_dataset
+
+# 2. Train baseline models (Logit + XGBoost)
+python 01_data_models_v0.py
+
+# 3. Run fairness audit (TOST + bias decomposition)
+python -m src.generate_fairness_reports
+
+# 4. Run mitigation pipeline (FPDP proxy removal + retraining)
+python -m src.mitigation
+
+# 5. Run performance evaluation (all models)
+python -m src.performance
+
+# 6. Run economics analysis (P&L, threshold optimization)
+python -m src.economics
+
+# 7. Run stability analysis
+python -m src.stability
+
+# 8. Generate trade-off synthesis
+python -m src.tradeoffs
+
+# 9. Build the web app
+python -m app.build
+```
+
+### TabICL (GPU Required)
+
+TabICL cannot run on CPU due to a [known segfault](docs/soutenance_notes.md#tabicl--diagnostic-du-crash-cpu-et-décision) in `tabicl==2.2.0`. To train or run inference:
+
+1. Open Google Colab with a **GPU runtime** (Edit > Notebook settings > GPU)
+2. Upload `data/clean.parquet`, `data/features.json`, and `data/split.json`
+3. Run `colab/train_tabicl.py` (baseline) or `colab/train_tabicl_mitigated.py` (mitigated)
+
+Pre-computed predictions are versioned in `data/tabicl_predictions.parquet` and `data/tabicl_mitigated_predictions.parquet`.
+
+## 📊 Models
+
+| Model | Type | AUC (test) | AUC (GroupKFold 5×) | Features |
+|---|---|---|---|---|
+| **Logistic Regression** | White-box | 0.589 | 0.603 ± 0.024 | 156 |
+| **XGBoost** | ML (boosted trees) | 0.611 | 0.599 ± 0.024 | 158 |
+| **TabICL** | Tabular Foundation Model | 0.632 | 0.591 ± 0.038 | 158 |
+
+> **Note:** The GroupKFold AUC (splitting by wave) is the reliable metric to cite. The single-split test AUC, particularly for TabICL, is likely optimistic due to high fold variance.
+
+### Mitigated Variants
+
+All three models have mitigated versions trained on 154 features after removing 4 FPDP-identified racial proxies (`attr3_1_B`, `career_c_B_12`, `go_out_B`, `intel3_1_B`).
+
+## ⚖️ Fairness Audit
+
+Our fairness framework uses the **TOST equivalence test** (Schuirmann, 1987), which reverses the burden of proof: models are considered **biased by default** and must statistically prove that exposure gaps remain within ±10 percentage points.
+
+**Key result:** All three models reproduce societal biases present in the raw data (Asian candidates are under-favored by +8.6 pp in humans' actual choices). XGBoost is the most algorithmically neutral (≤ 4 pp added bias on all groups), while Logit significantly amplifies discrimination against Latino candidates (−12.5 pp of pure algorithmic bias).
+
+## 🌐 Web App
+
+Open `app/index.html` in any browser — no server required. Features:
+
+- **Recommendations:** For any test user, see their candidates ranked by the selected model with the top-3 picks highlighted and SHAP/coefficient explanations
+- **Simulator:** Logit and XGBoost mitigated are scored client-side in JavaScript (`score.js`), matching Python output to < 1e-4
+- **Model comparison:** Interactive tables from `reports/tradeoffs/` and `reports/economics/`
+
+Regenerate after model changes: `python -m app.build`
+
+## 📚 References
+
+- Fisman, R., & Iyengar, S. S. (20
+06). *Gender Differences in Mate Selection: Evidence from a Speed Dating Experiment.* The Quarterly Journal of Economics.
+- Hitsch, G. J., Hortaçsu, A., & Ariely, D. (2010). *Matching and Sorting in Online Dating.* American Economic Review.
+- Schuirmann, D. J. (1987). *A Comparison of the Two One-Sided Tests Procedure and the Power Approach for Assessing the Equivalence of Average Bioavailability.* Journal of Pharmacokinetics and Biopharmaceutics.
+- Pérignon, C., & Saurin, S. (2026). *Interpretability, Stability, and Algorithmic Fairness.* Course materials, HEC Paris MSc DSAIB.
+
+## 📄 License
+
+This project is an academic exercise. The Speed Dating Experiment dataset is publicly available on [Kaggle](https://www.kaggle.com/datasets/annavictoria/speed-dating-experiment) and [OpenML](https://www.openml.org/d/40536) under their respective terms.
