@@ -4,10 +4,6 @@
 > A scoring system for a fictional dating app, evaluated through the lens of
 > *performance*, *interpretability*, *stability*, and *fairness*.
 
-<p align="center">
-  <img src="reports/fairness/bias_decomposition.png" width="700" alt="Bias decomposition: societal vs algorithmic"/>
-</p>
-
 ## 📋 Overview
 
 **HEC Match** is a group project for the MSc DSAIB course *"Interpretability, Stability, and Algorithmic Fairness"* (Prof. Christophe Pérignon & Dr. Sébastien Saurin, HEC Paris, September 2026).
